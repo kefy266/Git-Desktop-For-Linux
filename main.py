@@ -63,4 +63,72 @@ def git_remote_set_fetchurl(remote_name, fetch_url):
     subprocess.run(["git", "remote", "set-url", "--fetch", remote_name, fetch_url])
 
 #BRANCH COMMANDS
-#Yakında branch komutları eklenecek.
+
+def git_branch():
+    subprocess.run(["git", "branch"])
+
+def git_branch_create(branch_name):
+    subprocess.run(["git", "branch", branch_name])
+
+def git_branch_delete(branch_name):
+    subprocess.run(["git", "branch", "-d", branch_name])
+
+def git_branch_rename(old_name, new_name):
+    subprocess.run(["git", "branch", "-m", old_name, new_name])
+
+def git_branch_checkout(branch_name):
+    subprocess.run(["git", "checkout", branch_name])
+
+def git_branch_checkout_new(branch_name):
+    subprocess.run(["git", "checkout", "-b", branch_name])
+
+def git_branch_merge(branch_name):
+    subprocess.run(["git", "merge", branch_name])
+
+def git_branch_rebase(branch_name):
+    subprocess.run(["git", "rebase", branch_name])
+
+def git_branch_list(): 
+    subprocess.run(["git", "branch", "-a"])
+
+def git_branch_delete_remote(remote_name, branch_name):
+    subprocess.run(["git", "push", remote_name, "--delete", branch_name])
+
+def git_branch_set_upstream(branch_name, remote_name, remote_branch):
+    subprocess.run(["git", "branch", "--set-upstream-to", f"{remote_name}/{remote_branch}", branch_name])
+
+def git_branch_show_upstream(branch_name):
+    subprocess.run(["git", "rev-parse", "--abbrev-ref", f"{branch_name}@{{upstream}}"])
+
+def git_branch_list_remote(remote_name):
+    subprocess.run(["git", "ls-remote", "--heads", remote_name])
+
+def git_branch_list_merged():
+    subprocess.run(["git", "branch", "--merged"])
+
+def git_branch_list_unmerged():
+    subprocess.run(["git", "branch", "--no-merged"])
+
+def git_branch_delete_merged():
+    subprocess.run(["git", "branch", "--merged", "|", "grep", "-v", "'*'", "|", "xargs", "git", "branch", "-d"])
+
+def git_branch_delete_unmerged():
+    subprocess.run(["git", "branch", "--no-merged", "|", "grep", "-v", "'*'", "|", "xargs", "git", "branch", "-D"])
+
+def git_branch_list_remote_merged(remote_name):
+    subprocess.run(["git", "branch", "-r", "--merged", remote_name])
+
+def git_branch_list_remote_unmerged(remote_name):
+    subprocess.run(["git", "branch", "-r", "--no-merged", remote_name])
+
+def git_branch_delete_remote_merged(remote_name):
+    subprocess.run(["git", "branch", "-r", "--merged", remote_name, "|", "grep", "-v", "'*'", "|", "xargs", "git", "push", remote_name, "--delete"])
+
+def git_branch_delete_remote_unmerged(remote_name):
+    subprocess.run(["git", "branch", "-r", "--no-merged", remote_name, "|", "grep", "-v", "'*'", "|", "xargs", "git", "push", remote_name, "--delete"])
+
+def git_branch_list_remote_merged_branches(remote_name):
+    subprocess.run(["git", "branch", "-r", "--merged", remote_name, "|", "grep", "-v", "'*'", "|", "xargs", "git", "branch", "-r"])
+
+def git_branch_list_remote_unmerged_branches(remote_name):
+    subprocess.run(["git", "branch", "-r", "--no-merged", remote_name, "|", "grep", "-v", "'*'", "|", "xargs", "git", "branch", "-r"])
