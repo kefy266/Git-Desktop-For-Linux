@@ -18,5 +18,4 @@ TAG İŞLEMLERİ
 
 
 
-***Geliştirici: Kağan Efe TOPÇU [@kefy266](https://github.com/kefy266)
-***
+Geliştirici: Kağan Efe TOPÇU [@kefy266](https://github.com/kefy266)
