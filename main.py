@@ -147,9 +147,6 @@ def git_discard_all_changes():
 def git_restore_file(file_path):
     subprocess.run(["git", "restore", file_path])
 
-def git_restore_file(file_path):
-    subprocess.run(["git", "restore", file_path])
-
 def git_stash_save(message):
     subprocess.run(["git", "stash", "save", message])
 
@@ -164,3 +161,49 @@ def git_tag_create(tag_name, message):
 
 def git_tag_list():
     subprocess.run(["git", "tag"])
+
+#DOSYA İŞLEMLERİ
+
+def git_add_file(file_path):
+    subprocess.run(["git", "add", file_path])
+
+def git_reset_file(file_path):
+    subprocess.run(["git", "reset", file_path])
+
+#RESET VE COMMIT İŞLEMLERİ
+
+def git_reset_hard(commit_hash):
+    subprocess.run(["git", "reset", "--hard", commit_hash])
+
+def git_reset_soft(commit_hash):
+    subprocess.run(["git", "reset", "--soft", commit_hash])
+
+#STASH İŞLEMLERİ
+
+def git_stash_apply(stash_name):
+    subprocess.run(["git", "stash", "apply", stash_name])
+
+def git_stash_drop(stash_name):
+    subprocess.run(["git", "stash", "drop", stash_name])
+
+def git_stash_clear():
+    subprocess.run(["git", "stash", "clear"])
+
+#TAG İŞLEMLERİ
+
+def git_tag_delete(tag_name):
+    subprocess.run(["git", "tag", "-d", tag_name])
+
+def git_tag_push(tag_name):
+    subprocess.run(["git", "push", "origin", tag_name])
+
+def git_tag_push_all():
+    subprocess.run(["git", "push", "origin", "--tags"])
+
+#ÇAKIŞMALARI ÇÖZME
+
+def git_merge_abort():
+    subprocess.run(["git", "merge", "--abort"])
+
+def git_rebase_abort():
+    subprocess.run(["git", "rebase", "--abort"])
