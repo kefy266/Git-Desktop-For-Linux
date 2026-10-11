@@ -132,3 +132,35 @@ def git_branch_list_remote_merged_branches(remote_name):
 
 def git_branch_list_remote_unmerged_branches(remote_name):
     subprocess.run(["git", "branch", "-r", "--no-merged", remote_name, "|", "grep", "-v", "'*'", "|", "xargs", "git", "branch", "-r"])
+
+#GEÇMİŞE DÖNÜK KOMUTLAR
+
+def git_log(limit=10):
+    subprocess.run(["git", "log", f"-n {limit}", "--oneline"])
+
+def git_show(commit_hash):
+    subprocess.run(["git", "show", commit_hash])
+
+def git_discard_all_changes():
+    subprocess.run(["git", "checkout", "."])
+
+def git_restore_file(file_path):
+    subprocess.run(["git", "restore", file_path])
+
+def git_restore_file(file_path):
+    subprocess.run(["git", "restore", file_path])
+
+def git_stash_save(message):
+    subprocess.run(["git", "stash", "save", message])
+
+def git_stash_pop():
+    subprocess.run(["git", "stash", "pop"])
+
+def git_stash_list():
+    subprocess.run(["git", "stash", "list"])
+
+def git_tag_create(tag_name, message):
+    subprocess.run(["git", "tag", "-a", tag_name, "-m", message])
+
+def git_tag_list():
+    subprocess.run(["git", "tag"])
