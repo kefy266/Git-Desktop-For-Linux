@@ -189,8 +189,9 @@
       "bases:Yeni taban oluştur": false
     }
   },
-  "active": "f6267a3d6d959f75",
+  "active": "be3de460ff0e96de",
   "lastOpenFiles": [
+    "__pycache__/main.cpython-314.pyc",
     "loginsystem.py",
     "main.py",
     "__pycache__/girissistemi.cpython-314.pyc",

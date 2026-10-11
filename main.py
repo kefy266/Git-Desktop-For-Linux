@@ -110,10 +110,10 @@ def git_branch_list_unmerged():
     subprocess.run(["git", "branch", "--no-merged"])
 
 def git_branch_delete_merged():
-    subprocess.run(["git", "branch", "--merged", "|", "grep", "-v", "'*'", "|", "xargs", "git", "branch", "-d"])
+    subprocess.run("git branch --merged | grep -v '*' | xargs -r git branch -d", shell=True)
 
 def git_branch_delete_unmerged():
-    subprocess.run(["git", "branch", "--no-merged", "|", "grep", "-v", "'*'", "|", "xargs", "git", "branch", "-D"])
+    subprocess.run("git branch --no-merged | grep -v '*' | xargs -r git branch -D", shell=True)
 
 def git_branch_list_remote_merged(remote_name):
     subprocess.run(["git", "branch", "-r", "--merged", remote_name])
@@ -122,21 +122,21 @@ def git_branch_list_remote_unmerged(remote_name):
     subprocess.run(["git", "branch", "-r", "--no-merged", remote_name])
 
 def git_branch_delete_remote_merged(remote_name):
-    subprocess.run(["git", "branch", "-r", "--merged", remote_name, "|", "grep", "-v", "'*'", "|", "xargs", "git", "push", remote_name, "--delete"])
+    subprocess.run(f"git branch -r --merged {remote_name} | grep -v '*' | xargs -r git push {remote_name} --delete", shell=True)
 
 def git_branch_delete_remote_unmerged(remote_name):
-    subprocess.run(["git", "branch", "-r", "--no-merged", remote_name, "|", "grep", "-v", "'*'", "|", "xargs", "git", "push", remote_name, "--delete"])
+    subprocess.run(f"git branch -r --no-merged {remote_name} | grep -v '*' | xargs -r git push {remote_name} --delete", shell=True)
 
 def git_branch_list_remote_merged_branches(remote_name):
-    subprocess.run(["git", "branch", "-r", "--merged", remote_name, "|", "grep", "-v", "'*'", "|", "xargs", "git", "branch", "-r"])
+    subprocess.run(f"git branch -r --merged {remote_name} | grep -v '*' | xargs -r git branch -r", shell=True)
 
 def git_branch_list_remote_unmerged_branches(remote_name):
-    subprocess.run(["git", "branch", "-r", "--no-merged", remote_name, "|", "grep", "-v", "'*'", "|", "xargs", "git", "branch", "-r"])
+    subprocess.run(f"git branch -r --no-merged {remote_name} | grep -v '*' | xargs -r git branch -r", shell=True)
 
 #GEÇMİŞE DÖNÜK KOMUTLAR
 
 def git_log(limit=10):
-    subprocess.run(["git", "log", f"-n {limit}", "--oneline"])
+    subprocess.run(["git", "log", "-n", str(limit), "--oneline"])
 
 def git_show(commit_hash):
     subprocess.run(["git", "show", commit_hash])
