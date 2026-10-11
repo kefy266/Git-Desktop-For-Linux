@@ -6,9 +6,9 @@
 *Backend'de giriş kodu, temel,remote ve branch komutları başarıyla eklendi.*
 ### Mevcut Eklenen Özellikler:
 
-***GİRİS-SİSTEMİ
-TEMEL-KODLAR
-REMOTE-KODLARI
-BRANCH_KODLARI***
+***GİRİŞ SİSTEMİ
+TEMEL KODLAR
+REMOTE KODLARI
+BRANCH KODLARI***
 
 ***Geliştirici: Kağan Efe TOPÇU @kefy266***
