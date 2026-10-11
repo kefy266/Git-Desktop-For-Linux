@@ -79,7 +79,8 @@
               "title": "Yer İmleri"
             }
           }
-        ]
+        ],
+        "currentTab": 1
       }
     ],
     "direction": "horizontal",
@@ -188,7 +189,7 @@
       "bases:Yeni taban oluştur": false
     }
   },
-  "active": "be3de460ff0e96de",
+  "active": "f6267a3d6d959f75",
   "lastOpenFiles": [
     "loginsystem.py",
     "main.py",
