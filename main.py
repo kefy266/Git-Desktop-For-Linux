@@ -1,4 +1,4 @@
-from girissistemi import git_giris
+from loginsystem import git_giris
 import os
 import subprocess
 
