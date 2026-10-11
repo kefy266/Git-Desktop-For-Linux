@@ -191,12 +191,17 @@
   },
   "active": "be3de460ff0e96de",
   "lastOpenFiles": [
-    "__pycache__/main.cpython-314.pyc",
-    "loginsystem.py",
-    "main.py",
-    "__pycache__/girissistemi.cpython-314.pyc",
-    "__pycache__",
-    "girissistemi.py",
+    "app/__pycache__/app.cpython-314.pyc",
+    "app/__pycache__",
+    "app/app.py",
+    "__pycache__/loginsystem.cpython-314.pyc",
+    "app",
+    "App/__pycache__/app.cpython-314.pyc",
+    "App/__pycache__/git_engine.cpython-314.pyc",
+    "App/__pycache__",
+    "App/app.py",
+    "App/git_engine.py",
+    "App",
     "README.md"
   ]
 }

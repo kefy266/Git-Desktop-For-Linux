@@ -27,6 +27,9 @@ def git_commit(message):
 def git_clone(repo_url):
     subprocess.run(["git", "clone", repo_url])
 
+def git_fetch():
+    subprocess.run(["git", "fetch"])
+
 #REMOTE COMMANDS
 
 def git_remote_add(remote_name, remote_url):
@@ -207,3 +210,47 @@ def git_merge_abort():
 
 def git_rebase_abort():
     subprocess.run(["git", "rebase", "--abort"])
+
+#DEĞİŞİKLİKLERİ GÖRÜNTÜLEME
+
+def git_diff():
+    subprocess.run(["git", "diff"])
+
+def git_diff_cached():
+    subprocess.run(["git", "diff", "--cached"])
+
+def git_diff_commit(commit_hash):
+    subprocess.run(["git", "diff", commit_hash])
+
+def git_diff_commit_cached(commit_hash):
+    subprocess.run(["git", "diff", "--cached", commit_hash])
+
+def git_diff_commit_range(commit_hash1, commit_hash2):
+    subprocess.run(["git", "diff", commit_hash1, commit_hash2])
+
+def git_diff_commit_range_cached(commit_hash1, commit_hash2):
+    subprocess.run(["git", "diff", "--cached", commit_hash1, commit_hash2])
+
+def git_diff_staged():
+    subprocess.run(["git", "diff", "--staged"])
+
+def git_diff_staged_cached():
+    subprocess.run(["git", "diff", "--cached", "--staged"])
+
+def git_diff_staged_commit(commit_hash):
+    subprocess.run(["git", "diff", "--cached", "--staged", commit_hash])
+
+def git_diff_staged_commit_cached(commit_hash):
+    subprocess.run(["git", "diff", "--cached", "--staged", "--cached", commit_hash])
+
+def git_diff_staged_commit_range(commit_hash1, commit_hash2):
+    subprocess.run(["git", "diff", "--cached", "--staged", commit_hash1, commit_hash2])
+
+def git_diff_staged_commit_range_cached(commit_hash1, commit_hash2):
+    subprocess.run(["git", "diff", "--cached", "--staged", "--cached", commit_hash1, commit_hash2])
+
+def git_stage_file(file_path):
+    subprocess.run(["git", "add", file_path])
+
+def git_unstage_file(file_path):
+    subprocess.run(["git", "reset", "HEAD", file_path])
