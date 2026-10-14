@@ -254,3 +254,10 @@ def git_stage_file(file_path):
 
 def git_unstage_file(file_path):
     subprocess.run(["git", "reset", "HEAD", file_path])
+
+def git_stage_all():
+    subprocess.run(["git", "add", "."])
+
+def git_unstage_all():
+    subprocess.run(["git", "reset", "HEAD", "."])
+

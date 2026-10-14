@@ -191,6 +191,7 @@
   },
   "active": "be3de460ff0e96de",
   "lastOpenFiles": [
+    "README.md",
     "app/__pycache__/app.cpython-314.pyc",
     "app/__pycache__",
     "app/app.py",
@@ -200,8 +201,6 @@
     "App/__pycache__/git_engine.cpython-314.pyc",
     "App/__pycache__",
     "App/app.py",
-    "App/git_engine.py",
-    "App",
-    "README.md"
+    "App/git_engine.py"
   ]
 }
