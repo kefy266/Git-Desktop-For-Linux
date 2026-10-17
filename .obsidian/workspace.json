@@ -13,12 +13,12 @@
             "state": {
               "type": "markdown",
               "state": {
-                "file": "README.md",
+                "file": "file:/home/kagan/Origin Edge/bilgiler.md",
                 "mode": "source",
                 "source": false
               },
               "icon": "lucide-file",
-              "title": "README"
+              "title": "bilgiler"
             }
           }
         ]
@@ -55,7 +55,7 @@
             "state": {
               "type": "search",
               "state": {
-                "query": "",
+                "query": "\"### 🔑 Mailcow Yönetim API- **Admin API Key:** `8815f2f4e2cac6eed67d3d5071b20d43c1c33f57`- **Mailcow Panel:** `https://mail.edgemailtr.com`### 📧 Sistem SMTP Gönderici Hesabı- **E-Posta Adresi:** `noreply@edgemailtr.com`  *(⚠️ Alfabe paneli bu adresi kullanmıyor — panel `.env` dosyasında `MAIL_FROM_ADDRESS=\\\"noreply@alfabe.co\\\"`)*- **SMTP Şifresi:** `RPzAc7izWtmD5n6u62wAHKs-`- **SMTP Host:** `mail.edgemailtr.com` / `87.76.146.25`- **SMTP Portu:** `587` (STARTTLS) veya `465` (SSL/TLS)- **IMAP Portu:** `993` (SSL/TLS)\"",
                 "matchingCase": false,
                 "explainSearch": false,
                 "collapseAll": false,
@@ -189,18 +189,23 @@
       "bases:Yeni taban oluştur": false
     }
   },
-  "active": "be3de460ff0e96de",
+  "active": "f6267a3d6d959f75",
   "lastOpenFiles": [
-    "README.md",
-    "app/__pycache__/app.cpython-314.pyc",
-    "app/__pycache__",
-    "app/app.py",
-    "__pycache__/loginsystem.cpython-314.pyc",
-    "app",
-    "App/__pycache__/app.cpython-314.pyc",
-    "App/__pycache__/git_engine.cpython-314.pyc",
-    "App/__pycache__",
-    "App/app.py",
-    "App/git_engine.py"
+    "qt/app.py",
+    "qt/ui/main_window.py",
+    "qt/ui/main_window.py.tmp.15515.56d63e9d5707",
+    "qt/ui/dialogs.py",
+    "qt/ui/dialogs.py.tmp.15515.6f38638c6c68",
+    "qt/ui/toolbar.py.tmp.15515.0977cd75e7e4",
+    "qt/ui/toolbar.py.tmp.15515.c3d1b2b7b9d5",
+    "qt/ui/toolbar.py",
+    "qt/ui/toolbar.py.tmp.15515.9596ff439e06",
+    "qt/ui/history_view.py",
+    "qt/ui/history_view.py.tmp.15515.4f27b8fd25db",
+    "file:/home/kagan/Edge/bilgiler.md",
+    "file:/home/kagan/Origin Edge/bilgiler.md",
+    "freebuff/README.md",
+    "antigravty/README.md",
+    "README.md"
   ]
 }
