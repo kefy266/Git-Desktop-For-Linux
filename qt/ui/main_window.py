@@ -61,7 +61,8 @@ class MainWindow(QMainWindow):
         if geometry is not None:
             self.restoreGeometry(geometry)
 
-        self.fetch_timer = QTimer(self, interval=AUTO_FETCH_MS)
+        self.fetch_timer = QTimer(self)
+        self.fetch_timer.setInterval(AUTO_FETCH_MS)
         self.fetch_timer.timeout.connect(lambda: self.sync("fetch", quiet=True))
         self.fetch_timer.start()
 

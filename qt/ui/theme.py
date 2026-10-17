@@ -125,10 +125,11 @@ def _stylesheet(c: dict) -> str:
     #ToolbarButton:hover {{ background: {c['toolbar_hover']}; }}
     #ToolbarButton[open="true"] {{ background: {c['toolbar_open']}; }}
     #ToolbarButton[open="true"] QLabel {{ color: {c['toolbar_open_text']}; }}
-    #ToolbarButton:disabled QLabel {{ color: #6a737d; }}
     #ToolbarCaption {{ color: {c['toolbar_caption']}; font-size: 11px; }}
     #ToolbarTitle {{ color: {c['toolbar_text']}; font-weight: 600; }}
     #ToolbarIcon, #ToolbarArrow {{ color: {c['toolbar_text']}; }}
+    /* Qt ignores an ancestor's :disabled in descendant selectors, so style the labels themselves */
+    #ToolbarTitle:disabled, #ToolbarIcon:disabled, #ToolbarArrow:disabled, #ToolbarCaption:disabled {{ color: #6a737d; }}
 
     /* ---------- sidebar ---------- */
     #Sidebar {{ background: {c['bg']}; }}

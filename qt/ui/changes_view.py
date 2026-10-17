@@ -72,6 +72,7 @@ class ChangesView(QWidget):
         self.list = QListWidget()
         self.list.setUniformItemSizes(True)
         self.list.setTextElideMode(Qt.ElideLeft)  # keep the file name visible
+        self.list.setHorizontalScrollBarPolicy(Qt.ScrollBarAlwaysOff)
         self.list.currentItemChanged.connect(self._on_current_changed)
         self.list.itemChanged.connect(self._on_item_changed)
         self.list.setContextMenuPolicy(Qt.CustomContextMenu)

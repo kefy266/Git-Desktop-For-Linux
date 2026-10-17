@@ -61,6 +61,7 @@ class HistoryList(QListWidget):
         self._load_page = load_page
         self._exhausted = False
         self.setItemDelegate(_CommitDelegate(self))
+        self.setHorizontalScrollBarPolicy(Qt.ScrollBarAlwaysOff)
         self.setUniformItemSizes(True)
         self.currentItemChanged.connect(lambda item, _p: self.commit_selected.emit(item.data(COMMIT_ROLE) if item else {}))
         self.verticalScrollBar().valueChanged.connect(self._maybe_load_more)
@@ -161,6 +162,7 @@ class CommitView(QWidget):
         self.splitter = QSplitter(Qt.Horizontal)
         self.files = QListWidget()
         self.files.setTextElideMode(Qt.ElideLeft)
+        self.files.setHorizontalScrollBarPolicy(Qt.ScrollBarAlwaysOff)
         self.files.currentItemChanged.connect(self._on_file_changed)
         self.diff = DiffView(show_header=False)
         self.splitter.addWidget(self.files)
