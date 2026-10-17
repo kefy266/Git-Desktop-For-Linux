@@ -27,9 +27,10 @@ class GitDesktopWindow(Adw.ApplicationWindow):
         self.selected_file = None
         self.changed_files = []
         self.staged_state = {}
+        self._syncing_select_all = False
 
         self._build_ui()
-        self.refresh_all()
+        self.refresh_all(refresh_profile=True)
 
     def _build_ui(self):
         root_box = Gtk.Box(orientation=Gtk.Orientation.VERTICAL)
@@ -219,7 +220,10 @@ class GitDesktopWindow(Adw.ApplicationWindow):
         paned.set_start_child(sidebar_box)
 
         # -------- RIGHT MAIN AREA --------
-        self.diff_view = DiffView(on_discard_callback=self._on_discard_file)
+        self.diff_view = DiffView(
+            on_discard_callback=self._on_discard_file,
+            on_open_editor_callback=lambda path: self.gh_service.open_in_editor(self.git.repo_path, path)
+        )
         paned.set_end_child(self.diff_view)
 
     # ---------------- BRANCH POPOVER ----------------
@@ -246,20 +250,33 @@ class GitDesktopWindow(Adw.ApplicationWindow):
         scroll = Gtk.ScrolledWindow()
         scroll.set_vexpand(True)
         self.branch_listbox = Gtk.ListBox()
-        self.branch_listbox.connect("row-selected", self._on_branch_row_selected)
+        # row-activated fires on every click; row-selected would ignore re-clicks
+        self.branch_listbox.connect("row-activated", self._on_branch_row_selected)
         scroll.set_child(self.branch_listbox)
         self.branch_box.append(scroll)
 
         self.branch_popover.set_child(self.branch_box)
 
     # ---------------- REFRESH & STATE ----------------
-    def refresh_all(self):
-        # 1. Update GitHub profile button in header
-        profile = self.gh_service.get_user_profile()
-        if profile:
-            self.gh_user_content.set_label(f"@{profile['login']}")
-        else:
-            self.gh_user_content.set_label("Sign In")
+    def _refresh_profile_async(self):
+        """Profile lookup hits the network; keep it off the GTK main thread."""
+        def _worker():
+            profile = self.gh_service.get_user_profile()
+
+            def _done():
+                if profile:
+                    self.gh_user_content.set_label(f"@{profile['login']}")
+                else:
+                    self.gh_user_content.set_label("Sign In")
+
+            GLib.idle_add(_done)
+
+        threading.Thread(target=_worker, daemon=True).start()
+
+    def refresh_all(self, refresh_profile=False):
+        # 1. Update GitHub profile button in header (only when asked: it's a network call)
+        if refresh_profile:
+            self._refresh_profile_async()
 
         # 2. Update IDE Button in header
         preferred_editor = self.gh_service.get_preferred_editor()
@@ -344,6 +361,8 @@ class GitDesktopWindow(Adw.ApplicationWindow):
                 badge.set_markup("<span foreground='#e01b24' weight='bold'>-</span>")
             elif status == 'R':
                 badge.set_markup("<span foreground='#ff7800' weight='bold'>→</span>")
+            elif status == 'U':
+                badge.set_markup("<span foreground='#e01b24' weight='bold'>!</span>")
             else:
                 badge.set_markup("<span foreground='#e5a50a' weight='bold'>●</span>")
             box.append(badge)
@@ -367,9 +386,19 @@ class GitDesktopWindow(Adw.ApplicationWindow):
             row.file_data = item
             self.files_listbox.append(row)
 
+        self._sync_select_all_check()
         self._update_commit_button_state()
         if first := self.files_listbox.get_row_at_index(0):
             self.files_listbox.select_row(first)
+
+    def _sync_select_all_check(self):
+        """Header checkbox mirrors whether every file is checked, without re-triggering its handler."""
+        all_checked = bool(self.changed_files) and all(
+            self.staged_state.get(f['path'], True) for f in self.changed_files
+        )
+        self._syncing_select_all = True
+        self.select_all_check.set_active(all_checked)
+        self._syncing_select_all = False
 
     def _populate_history_list(self):
         while row := self.history_listbox.get_first_child():
@@ -465,13 +494,19 @@ class GitDesktopWindow(Adw.ApplicationWindow):
 
     def _on_file_check_toggled(self, check, file_path):
         self.staged_state[file_path] = check.get_active()
+        if not self._syncing_select_all:
+            self._sync_select_all_check()
         self._update_commit_button_state()
 
     def _on_select_all_toggled(self, check):
+        if self._syncing_select_all:
+            return
         active = check.get_active()
         for item in self.changed_files:
             self.staged_state[item['path']] = active
 
+        # Row handlers must not re-sync the header while we flip every row
+        self._syncing_select_all = True
         row = self.files_listbox.get_first_child()
         while row:
             if hasattr(row, 'file_data'):
@@ -480,6 +515,7 @@ class GitDesktopWindow(Adw.ApplicationWindow):
                 if isinstance(first_widget, Gtk.CheckButton):
                     first_widget.set_active(active)
             row = row.get_next_sibling()
+        self._syncing_select_all = False
         self._update_commit_button_state()
 
     def _update_commit_button_state(self, *_args):
@@ -503,7 +539,7 @@ class GitDesktopWindow(Adw.ApplicationWindow):
             self.refresh_all()
 
     def _on_github_account_changed(self):
-        self.refresh_all()
+        self.refresh_all(refresh_profile=True)
 
     def _on_commit_clicked(self, _btn):
         summary = self.commit_summary_entry.get_text().strip()
@@ -518,7 +554,7 @@ class GitDesktopWindow(Adw.ApplicationWindow):
             else:
                 self.git.unstage_file(path)
 
-        ok, msg = self.git.commit(summary, desc)
+        ok, msg = self.git.git_commit(summary, desc)
         if ok:
             self.commit_summary_entry.set_text("")
             buf.set_text("")
@@ -549,13 +585,20 @@ class GitDesktopWindow(Adw.ApplicationWindow):
         self.sync_btn.set_sensitive(False)
 
         def _worker():
-            sync = self.git.get_sync_status()
-            if sync['ahead'] > 0 and sync['behind'] == 0:
-                ok, msg = self.git.push()
-            elif sync['behind'] > 0 and sync['ahead'] == 0:
-                ok, msg = self.git.pull()
-            else:
-                ok, msg = self.git.fetch()
+            try:
+                sync = self.git.get_sync_status()
+                if sync['behind'] > 0:
+                    # Pull first; if we also have local commits, push them afterwards
+                    ok, msg = self.git.git_pull()
+                    if ok and sync['ahead'] > 0:
+                        ok, msg = self.git.git_push()
+                elif sync['ahead'] > 0:
+                    ok, msg = self.git.git_push()
+                else:
+                    ok, msg = self.git.git_fetch()
+            except Exception as e:
+                # Never leave the spinner running forever
+                ok, msg = False, str(e)
 
             def _done():
                 self.sync_spinner.stop()

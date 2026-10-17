@@ -5,7 +5,12 @@ import subprocess
 from typing import Dict, List, Optional, Tuple, Any
 import requests
 
-CONFIG_DIR = os.path.expanduser("~/.config/git-desktop-linux")
+from git_service import run_git_command
+
+CONFIG_DIR = os.path.join(
+    os.environ.get("XDG_CONFIG_HOME") or os.path.expanduser("~/.config"),
+    "git-desktop-linux"
+)
 CONFIG_FILE = os.path.join(CONFIG_DIR, "config.json")
 REPOS_FILE = os.path.join(CONFIG_DIR, "repos.json")
 
@@ -23,7 +28,7 @@ class GitHubService:
     ]
 
     def __init__(self):
-        os.makedirs(CONFIG_DIR, exist_ok=True)
+        os.makedirs(CONFIG_DIR, mode=0o700, exist_ok=True)
         self.config = self._load_json(CONFIG_FILE, {
             "token": None,
             "preferred_editor": None
@@ -31,6 +36,12 @@ class GitHubService:
         self.repos_data = self._load_json(REPOS_FILE, {
             "recent_repos": []
         })
+        # Older versions wrote the token world-readable (0644); tighten it
+        if os.path.exists(CONFIG_FILE):
+            try:
+                os.chmod(CONFIG_FILE, 0o600)
+            except OSError:
+                pass
 
     def _load_json(self, path: str, default: Any) -> Any:
         if os.path.exists(path):
@@ -42,9 +53,14 @@ class GitHubService:
         return default
 
     def _save_json(self, path: str, data: Any):
+        # Write to a 0600 temp file and rename, so the token is never readable
+        # by other users and a crash mid-write can't corrupt the config.
+        tmp_path = f"{path}.tmp"
         try:
-            with open(path, "w", encoding="utf-8") as f:
+            fd = os.open(tmp_path, os.O_WRONLY | os.O_CREAT | os.O_TRUNC, 0o600)
+            with os.fdopen(fd, "w", encoding="utf-8") as f:
                 json.dump(data, f, indent=2, ensure_ascii=False)
+            os.replace(tmp_path, path)
         except Exception as e:
             print(f"Error saving {path}: {e}")
 
@@ -54,9 +70,12 @@ class GitHubService:
         if self.config.get("token"):
             return self.config["token"]
 
-        # 2. Check GitHub CLI (gh auth token)
+        # 2. Check GitHub CLI (gh auth token), unless the user signed out here
+        if not self.config.get("use_gh_cli", True):
+            return None
         try:
-            res = subprocess.run(["gh", "auth", "token"], capture_output=True, text=True, timeout=3)
+            res = subprocess.run(["gh", "auth", "token"], capture_output=True, text=True,
+                                 stdin=subprocess.DEVNULL, timeout=3)
             if res.returncode == 0 and res.stdout.strip():
                 return res.stdout.strip()
         except Exception:
@@ -65,13 +84,18 @@ class GitHubService:
 
     def set_token(self, token: Optional[str]):
         self.config["token"] = token.strip() if token else None
+        if token:
+            self.config["use_gh_cli"] = True
         self._save_json(CONFIG_FILE, self.config)
 
     def logout(self):
+        # Without this flag, the gh CLI token would silently log the user back in
+        self.config["use_gh_cli"] = False
         self.set_token(None)
 
-    def get_user_profile(self) -> Optional[Dict[str, Any]]:
-        token = self.get_token()
+    def get_user_profile(self, token: Optional[str] = None) -> Optional[Dict[str, Any]]:
+        """Fetches the GitHub profile. Network call: run it off the GTK main thread."""
+        token = token or self.get_token()
         if not token:
             return None
 
@@ -130,11 +154,8 @@ class GitHubService:
         return []
 
     def clone_repo(self, repo_url: str, target_dir: str) -> Tuple[bool, str]:
-        try:
-            res = subprocess.run(["git", "clone", repo_url, target_dir], capture_output=True, text=True)
-            return res.returncode == 0, res.stdout or res.stderr
-        except Exception as e:
-            return False, str(e)
+        res = run_git_command(["clone", "--", repo_url, target_dir])
+        return res.returncode == 0, (res.stdout or res.stderr).strip()
 
     # ==================== LOCAL & RECENT REPOSITORIES ====================
     def get_recent_repos(self) -> List[Dict[str, str]]:
@@ -167,10 +188,14 @@ class GitHubService:
         self._save_json(REPOS_FILE, self.repos_data)
 
     def init_new_repo(self, path: str, name: str, init_readme: bool = True) -> Tuple[bool, str]:
+        name = name.strip()
+        # Only a plain folder name: no "../", no sub-paths, no hidden dirs
+        if not name or name in (".", "..") or os.sep in name or name.startswith("."):
+            return False, f"Invalid repository name: '{name}'"
         target_dir = os.path.join(path, name)
         try:
             os.makedirs(target_dir, exist_ok=True)
-            res = subprocess.run(["git", "init"], cwd=target_dir, capture_output=True, text=True)
+            res = run_git_command(["init"], cwd=target_dir)
             if res.returncode != 0:
                 return False, res.stderr
 
@@ -179,8 +204,12 @@ class GitHubService:
                 if not os.path.exists(readme_path):
                     with open(readme_path, "w", encoding="utf-8") as f:
                         f.write(f"# {name}\n\nInitialized with Git Desktop For Linux.\n")
-                    subprocess.run(["git", "add", "README.md"], cwd=target_dir)
-                    subprocess.run(["git", "commit", "-m", "Initial commit"], cwd=target_dir)
+                    run_git_command(["add", "README.md"], cwd=target_dir)
+                    res = run_git_command(["commit", "-m", "Initial commit"], cwd=target_dir)
+                    if res.returncode != 0:
+                        # Typically: git user.name/user.email not set
+                        self.add_recent_repo(target_dir)
+                        return False, f"Repository created, but the initial commit failed:\n{res.stderr.strip()}"
 
             self.add_recent_repo(target_dir)
             return True, target_dir
@@ -226,7 +255,7 @@ class GitHubService:
 
         target = os.path.join(repo_path, file_path) if file_path else repo_path
         try:
-            subprocess.Popen([editor["cmd"], target])
+            subprocess.Popen([editor["cmd"], target], stdin=subprocess.DEVNULL, start_new_session=True)
             return True
         except Exception as e:
             print(f"Error launching editor: {e}")

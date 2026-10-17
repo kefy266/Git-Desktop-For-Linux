@@ -7,9 +7,10 @@ gi.require_version('GtkSource', '5')
 from gi.repository import Gtk, Adw, GtkSource, Pango
 
 class DiffView(Gtk.Box):
-    def __init__(self, on_discard_callback=None):
+    def __init__(self, on_discard_callback=None, on_open_editor_callback=None):
         super().__init__(orientation=Gtk.Orientation.VERTICAL)
         self.on_discard_callback = on_discard_callback
+        self.on_open_editor_callback = on_open_editor_callback
         self.current_file_path = None
         self.is_untracked = False
 
@@ -147,12 +148,16 @@ class DiffView(Gtk.Box):
     def _on_open_in_editor(self, _btn):
         if not self.current_file_path:
             return
+        # Prefer the editor chosen in Preferences
+        if self.on_open_editor_callback and self.on_open_editor_callback(self.current_file_path):
+            return
+
         target = self.current_file_path
         if hasattr(self, 'full_repo_path') and self.full_repo_path:
             target = os.path.join(self.full_repo_path, self.current_file_path)
 
-        # Try vscode, gnome-text-editor, or xdg-open
-        for cmd in ["code", "gnome-text-editor", "xdg-open"]:
+        # Fallback: no known editor installed, let the desktop decide
+        for cmd in ["xdg-open"]:
             try:
                 subprocess.Popen([cmd, target])
                 break

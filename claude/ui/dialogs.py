@@ -112,11 +112,25 @@ class GitHubAccountDialog(Adw.Window):
 
         self._refresh_content()
 
-    def _refresh_content(self):
+    def _clear_box(self):
         while child := self.box.get_first_child():
             self.box.remove(child)
 
-        profile = self.gh_service.get_user_profile()
+    def _refresh_content(self, error_text=None):
+        # Network request runs in a thread so the dialog never freezes
+        self._clear_box()
+        spinner = Gtk.Spinner(spinning=True, vexpand=True, valign=Gtk.Align.CENTER)
+        spinner.set_size_request(32, 32)
+        self.box.append(spinner)
+
+        def _worker():
+            profile = self.gh_service.get_user_profile()
+            GLib.idle_add(self._render_content, profile, error_text)
+
+        threading.Thread(target=_worker, daemon=True).start()
+
+    def _render_content(self, profile, error_text=None):
+        self._clear_box()
         if profile:
             # Logged In View
             title_lbl = Gtk.Label(label="Connected to GitHub", xalign=0)
@@ -132,7 +146,7 @@ class GitHubAccountDialog(Adw.Window):
             card.append(avatar_icon)
 
             info_box = Gtk.Box(orientation=Gtk.Orientation.VERTICAL, spacing=2)
-            name_lbl = Gtk.Label(label=f"<b>{profile['name']}</b>", use_markup=True, xalign=0)
+            name_lbl = Gtk.Label(label=f"<b>{GLib.markup_escape_text(profile['name'] or '')}</b>", use_markup=True, xalign=0)
             name_lbl.add_css_class("heading")
             info_box.append(name_lbl)
 
@@ -181,11 +195,17 @@ class GitHubAccountDialog(Adw.Window):
             desc.add_css_class("dim-label")
             self.box.append(desc)
 
-            self.token_entry = Gtk.PasswordEntryRow()
+            self.token_entry = Adw.PasswordEntryRow()
             self.token_entry.set_title("Personal Access Token")
+            self.token_entry.connect("entry-activated", self._on_sign_in)
             pref_group = Adw.PreferencesGroup()
             pref_group.add(self.token_entry)
             self.box.append(pref_group)
+
+            if error_text:
+                err_lbl = Gtk.Label(label=error_text, xalign=0, wrap=True)
+                err_lbl.add_css_class("error")
+                self.box.append(err_lbl)
 
             btn_box = Gtk.Box(orientation=Gtk.Orientation.HORIZONTAL, spacing=12)
             btn_box.set_halign(Gtk.Align.END)
@@ -195,20 +215,35 @@ class GitHubAccountDialog(Adw.Window):
             cancel_btn.connect("clicked", lambda _: self.close())
             btn_box.append(cancel_btn)
 
-            sign_in_btn = Gtk.Button(label="Sign In")
-            sign_in_btn.add_css_class("suggested-action")
-            sign_in_btn.connect("clicked", self._on_sign_in)
-            btn_box.append(sign_in_btn)
+            self.sign_in_btn = Gtk.Button(label="Sign In")
+            self.sign_in_btn.add_css_class("suggested-action")
+            self.sign_in_btn.connect("clicked", self._on_sign_in)
+            btn_box.append(self.sign_in_btn)
 
             self.box.append(btn_box)
 
-    def _on_sign_in(self, _btn):
+    def _on_sign_in(self, _widget):
         token = self.token_entry.get_text().strip()
-        if token:
-            self.gh_service.set_token(token)
-            if self.on_change_callback:
-                self.on_change_callback()
-            self._refresh_content()
+        if not token:
+            return
+        self.sign_in_btn.set_sensitive(False)
+
+        # Validate the token against the API before saving it
+        def _worker():
+            profile = self.gh_service.get_user_profile(token=token)
+
+            def _done():
+                if profile:
+                    self.gh_service.set_token(token)
+                    if self.on_change_callback:
+                        self.on_change_callback()
+                    self._render_content(profile)
+                else:
+                    self._render_content(None, "Token geçersiz veya GitHub'a ulaşılamadı.")
+
+            GLib.idle_add(_done)
+
+        threading.Thread(target=_worker, daemon=True).start()
 
     def _on_logout(self, _btn):
         self.gh_service.logout()
@@ -504,8 +539,8 @@ class RepositoryManagerDialog(Adw.Window):
 
         self.new_path_row = Adw.ActionRow()
         self.new_path_row.set_title("Local Path")
+        # Created on demand by init_new_repo, not just by opening this dialog
         default_dir = os.path.expanduser("~/Git")
-        os.makedirs(default_dir, exist_ok=True)
         self.chosen_path = default_dir
         self.new_path_row.set_subtitle(self.chosen_path)
 
@@ -589,7 +624,7 @@ class NewBranchDialog(Adw.Window):
         box.append(title_lbl)
 
         desc_lbl = Gtk.Label(
-            label=f"Your new branch will be based on your currently checked out branch (<b>{current_branch}</b>).",
+            label=f"Your new branch will be based on your currently checked out branch (<b>{GLib.markup_escape_text(current_branch)}</b>).",
             use_markup=True,
             xalign=0,
             wrap=True

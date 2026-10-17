@@ -3,6 +3,35 @@ import shutil
 import subprocess
 from typing import Dict, List, Optional, Tuple, Any
 
+
+def git_env() -> Dict[str, str]:
+    """Environment for git calls from the GUI.
+
+    GIT_TERMINAL_PROMPT=0 makes git fail fast instead of waiting forever for a
+    username/password on a terminal the user cannot see. Credential helpers
+    (libsecret, gh, store) keep working.
+    """
+    env = os.environ.copy()
+    env["GIT_TERMINAL_PROMPT"] = "0"
+    return env
+
+
+def run_git_command(args: List[str], cwd: Optional[str] = None) -> subprocess.CompletedProcess:
+    """Run git without a shell, never reading from stdin, never raising."""
+    try:
+        return subprocess.run(
+            ["git", *args],
+            cwd=cwd,
+            capture_output=True,
+            stdin=subprocess.DEVNULL,
+            text=True,
+            errors="replace",
+            env=git_env(),
+        )
+    except Exception as e:
+        return subprocess.CompletedProcess(args=["git", *args], returncode=-1, stdout="", stderr=str(e))
+
+
 class GitService:
     """
     Robust, object-oriented Git engine for Git Desktop Linux.
@@ -16,23 +45,9 @@ class GitService:
     def set_repo_path(self, path: str):
         self.repo_path = os.path.abspath(path)
 
-    def run_git(self, *args: str, check: bool = False) -> subprocess.CompletedProcess:
+    def run_git(self, *args: str) -> subprocess.CompletedProcess:
         """Run a git command in the repository path."""
-        try:
-            return subprocess.run(
-                ["git", *args],
-                cwd=self.repo_path,
-                capture_output=True,
-                text=True,
-                check=check
-            )
-        except Exception as e:
-            return subprocess.CompletedProcess(
-                args=["git", *args],
-                returncode=-1,
-                stdout="",
-                stderr=str(e)
-            )
+        return run_git_command(list(args), cwd=self.repo_path)
 
     def is_git_repo(self) -> bool:
         if not os.path.isdir(self.repo_path):
@@ -92,11 +107,8 @@ class GitService:
         return res.returncode == 0, res.stdout.strip() if res.returncode == 0 else res.stderr.strip()
 
     def git_clone(self, repo_url: str, target_dir: str) -> Tuple[bool, str]:
-        try:
-            res = subprocess.run(["git", "clone", repo_url, target_dir], capture_output=True, text=True)
-            return res.returncode == 0, res.stdout.strip() or res.stderr.strip()
-        except Exception as e:
-            return False, str(e)
+        res = run_git_command(["clone", "--", repo_url, target_dir])
+        return res.returncode == 0, res.stdout.strip() or res.stderr.strip()
 
     # ==================== REMOTE COMMANDS ====================
     def git_remote_add(self, remote_name: str, remote_url: str) -> Tuple[bool, str]:
@@ -177,7 +189,19 @@ class GitService:
                     local_branches.append(clean_line)
         return {"local": local_branches, "remote": remote_branches}
 
+    def validate_branch_name(self, branch_name: str) -> Tuple[bool, str]:
+        """Rejects invalid names and ones starting with '-' (would be read as an option)."""
+        if not branch_name or branch_name.startswith("-"):
+            return False, f"Invalid branch name: '{branch_name}'"
+        res = self.run_git("check-ref-format", "--branch", branch_name)
+        if res.returncode != 0:
+            return False, f"Invalid branch name: '{branch_name}'"
+        return True, ""
+
     def git_branch_create(self, branch_name: str) -> Tuple[bool, str]:
+        ok, msg = self.validate_branch_name(branch_name)
+        if not ok:
+            return False, msg
         res = self.run_git("branch", branch_name)
         return res.returncode == 0, res.stdout.strip() or res.stderr.strip()
 
@@ -195,6 +219,9 @@ class GitService:
         return res.returncode == 0, res.stderr.strip() or res.stdout.strip()
 
     def create_and_checkout_branch(self, branch_name: str) -> Tuple[bool, str]:
+        ok, msg = self.validate_branch_name(branch_name)
+        if not ok:
+            return False, msg
         res = self.run_git("checkout", "-b", branch_name)
         return res.returncode == 0, res.stderr.strip() or res.stdout.strip()
 
@@ -330,7 +357,7 @@ class GitService:
         r1 = self.run_git("reset", "HEAD", ".")
         r2 = self.run_git("restore", ".")
         r3 = self.run_git("clean", "-fd")
-        return r2.returncode == 0
+        return all(r.returncode == 0 for r in (r1, r2, r3))
 
     def restore_file(self, file_path: str) -> Tuple[bool, str]:
         res = self.run_git("restore", file_path)
@@ -338,9 +365,10 @@ class GitService:
 
     # ==================== STASH COMMANDS ====================
     def git_stash_save(self, message: str = "") -> Tuple[bool, str]:
-        cmd = ["stash", "save"]
+        # "stash save" is deprecated; "stash push -m" is the supported form
+        cmd = ["stash", "push"]
         if message.strip():
-            cmd.append(message.strip())
+            cmd.extend(["-m", message.strip()])
         res = self.run_git(*cmd)
         return res.returncode == 0, res.stdout.strip() or res.stderr.strip()
 
@@ -385,7 +413,9 @@ class GitService:
         return res.returncode == 0, res.stdout.strip() or res.stderr.strip()
 
     def git_tag_push(self, remote: str = "origin", tag_name: str = "") -> Tuple[bool, str]:
-        res = self.run_git("push", remote, tag_name)
+        if not tag_name.strip():
+            return False, "Tag name cannot be empty."
+        res = self.run_git("push", remote, f"refs/tags/{tag_name.strip()}")
         return res.returncode == 0, res.stdout.strip() or res.stderr.strip()
 
     def git_tag_push_all(self, remote: str = "origin") -> Tuple[bool, str]:
@@ -416,24 +446,34 @@ class GitService:
         return res.returncode == 0, res.stdout.strip() or res.stderr.strip()
 
     def get_status_files(self) -> List[Dict[str, Any]]:
-        res = self.run_git("status", "--porcelain=v1", "-uall")
+        # -z gives raw paths: no quoting/octal escapes for non-ASCII names (ö, ş, ...)
+        res = self.run_git("status", "--porcelain=v1", "-z", "-uall")
         files = []
         if res.returncode != 0:
             return files
 
-        for line in res.stdout.splitlines():
-            if len(line) < 4:
+        entries = res.stdout.split("\0")
+        i = 0
+        while i < len(entries):
+            entry = entries[i]
+            i += 1
+            if len(entry) < 4:
                 continue
-            x = line[0]
-            y = line[1]
-            raw_path = line[3:].strip()
-            if " -> " in raw_path:
-                raw_path = raw_path.split(" -> ")[-1]
-            path = raw_path.strip('"')
+            x = entry[0]
+            y = entry[1]
+            path = entry[3:]
+            orig_path = ""
+            if x in ('R', 'C'):
+                # Renames/copies are followed by the original path as a separate entry
+                orig_path = entries[i] if i < len(entries) else ""
+                i += 1
 
             is_staged = (x not in (' ', '?'))
 
-            if x == '?' or y == '?':
+            if 'U' in (x, y) or (x, y) in (('A', 'A'), ('D', 'D')):
+                status = 'U'
+                label = 'Conflicted'
+            elif x == '?' or y == '?':
                 status = '?'
                 label = 'Untracked'
             elif x == 'A' or y == 'A':
@@ -451,6 +491,7 @@ class GitService:
 
             files.append({
                 'path': path,
+                'orig_path': orig_path,
                 'filename': os.path.basename(path),
                 'dirname': os.path.dirname(path),
                 'status': status,
@@ -483,22 +524,10 @@ class GitService:
             res_status = self.run_git("status", "--porcelain", "--", file_path)
             if res_status.stdout.startswith("??"):
                 if os.path.isfile(full_path):
-                    try:
-                        with open(full_path, "r", errors="replace") as f:
-                            content = f.read()
-                        lines = content.splitlines()
-                        diff_lines = [
-                            f"diff --git a/{file_path} b/{file_path}",
-                            f"new file mode 100644",
-                            f"--- /dev/null",
-                            f"+++ b/{file_path}",
-                            f"@@ -0,0 +1,{len(lines)} @@"
-                        ]
-                        for l in lines:
-                            diff_lines.append(f"+{l}")
-                        return "\n".join(diff_lines)
-                    except Exception as e:
-                        return f"Error reading file: {e}"
+                    # Let git build the "new file" diff: it detects binary files
+                    # instead of dumping their bytes into the view.
+                    res = self.run_git("diff", "--no-index", "--", os.devnull, file_path)
+                    return res.stdout or res.stderr
 
             res = self.run_git("diff", "HEAD", "--", file_path)
             if not res.stdout.strip():
@@ -538,7 +567,7 @@ class GitService:
     def get_sync_status(self) -> Dict[str, Any]:
         res_upstream = self.run_git("rev-parse", "--abbrev-ref", "@{upstream}")
         if res_upstream.returncode != 0:
-            return {'ahead': 0, 'behind': 0, 'has_upstream': False, 'remote_name': ''}
+            return {'ahead': 0, 'behind': 0, 'has_upstream': False, 'upstream': ''}
 
         upstream = res_upstream.stdout.strip()
         res_count = self.run_git("rev-list", "--left-right", "--count", f"HEAD...{upstream}")
@@ -561,15 +590,14 @@ class GitService:
         name = res_name.stdout.strip()
         email = res_email.stdout.strip()
         if not name:
-            res_global_name = subprocess.run(["git", "config", "--global", "user.name"], capture_output=True, text=True)
-            name = res_global_name.stdout.strip()
+            name = run_git_command(["config", "--global", "user.name"]).stdout.strip()
         if not email:
-            res_global_email = subprocess.run(["git", "config", "--global", "user.email"], capture_output=True, text=True)
-            email = res_global_email.stdout.strip()
+            email = run_git_command(["config", "--global", "user.email"]).stdout.strip()
         return name, email
 
     def set_user_info(self, name: str, email: str, is_global: bool = True) -> bool:
+        # --local must run inside the repo, otherwise it writes to the process cwd's repo
         flag = "--global" if is_global else "--local"
-        r1 = subprocess.run(["git", "config", flag, "user.name", name], capture_output=True, text=True)
-        r2 = subprocess.run(["git", "config", flag, "user.email", email], capture_output=True, text=True)
+        r1 = self.run_git("config", flag, "user.name", name)
+        r2 = self.run_git("config", flag, "user.email", email)
         return r1.returncode == 0 and r2.returncode == 0
