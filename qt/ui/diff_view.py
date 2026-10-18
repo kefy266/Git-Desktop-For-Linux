@@ -1,15 +1,16 @@
 """Unified diff viewer: old/new line-number gutter and colored rows, like GitHub Desktop."""
 
+import os
 import re
 from typing import List, Optional, Tuple
 
-from PySide6.QtCore import QRect, QSize, Qt, Signal
-from PySide6.QtGui import QColor, QFontDatabase, QPainter, QTextBlockFormat, QTextCursor
+from PySide6.QtCore import QRect, QRectF, QSize, Qt, Signal
+from PySide6.QtGui import QColor, QFontDatabase, QPainter, QPixmap, QTextBlockFormat, QTextCursor
 from PySide6.QtWidgets import (
     QHBoxLayout, QLabel, QPlainTextEdit, QPushButton, QStackedWidget, QVBoxLayout, QWidget,
 )
 
-from ui import theme
+from ui import icons, theme
 
 MAX_DIFF_LINES = 20000
 _HUNK_RE = re.compile(r"^@@ -(\d+)(?:,\d+)? \+(\d+)(?:,\d+)? @@")
@@ -157,24 +158,93 @@ class DiffEditor(QPlainTextEdit):
         self.moveCursor(QTextCursor.Start)
 
 
+class EmptyState(QWidget):
+    """Big round icon, title, subtitle and optional action cards (GitHub Desktop blank slates)."""
+
+    def __init__(self, parent=None):
+        super().__init__(parent, objectName="MainArea")
+        self.setAttribute(Qt.WA_StyledBackground, True)
+        lay = QVBoxLayout(self)
+        lay.setAlignment(Qt.AlignCenter)
+        lay.setSpacing(10)
+        self.icon = QLabel(objectName="EmptyIcon", alignment=Qt.AlignCenter)
+        self.icon.setFixedSize(72, 72)
+        lay.addWidget(self.icon, 0, Qt.AlignHCenter)
+        lay.addSpacing(6)
+        self.title = QLabel(objectName="Title", alignment=Qt.AlignCenter)
+        lay.addWidget(self.title)
+        self.subtitle = QLabel(objectName="Dim", alignment=Qt.AlignCenter, wordWrap=True)
+        self.subtitle.setFixedWidth(460)  # fixed width lets the wrapped text get its full height
+        lay.addWidget(self.subtitle, 0, Qt.AlignHCenter)
+        self.actions_box = QVBoxLayout()
+        self.actions_box.setSpacing(8)
+        self.actions_box.setContentsMargins(0, 14, 0, 0)
+        lay.addLayout(self.actions_box)
+
+    def set_content(self, title: str, subtitle: str = "", icon: str = "sparkle", actions=None):
+        self.icon.setPixmap(icons.pixmap(icon, theme.colors()["text_dim"], 30))
+        self.title.setText(title)
+        self.title.setVisible(bool(title))
+        self.subtitle.setText(subtitle)
+        self.subtitle.setVisible(bool(subtitle))
+        while self.actions_box.count():
+            w = self.actions_box.takeAt(0).widget()
+            if w:
+                w.deleteLater()
+        for label, hint, icon_name, slot in actions or []:
+            self.actions_box.addWidget(ActionCard(label, hint, icon_name, slot), 0, Qt.AlignHCenter)
+
+
+class ActionCard(QPushButton):
+    """Clickable rounded card: icon, label and a dim hint (e.g. the shortcut)."""
+
+    def __init__(self, label: str, hint: str, icon_name: str, slot, parent=None):
+        super().__init__(parent, objectName="Card")
+        self.setCursor(Qt.PointingHandCursor)
+        self.setFixedSize(420, 52)
+        lay = QHBoxLayout(self)
+        lay.setContentsMargins(16, 0, 16, 0)
+        lay.setSpacing(12)
+        ic = QLabel()
+        ic.setPixmap(icons.pixmap(icon_name, theme.colors()["accent"], 18))
+        lay.addWidget(ic)
+        text = QLabel(label)
+        f = text.font()
+        f.setWeight(f.Weight.DemiBold)
+        text.setFont(f)
+        lay.addWidget(text, 1)
+        lay.addWidget(QLabel(hint, objectName="Dim"))
+        for child in self.findChildren(QLabel):
+            child.setAttribute(Qt.WA_TransparentForMouseEvents)
+        self.clicked.connect(slot)
+
+
 class DiffView(QWidget):
-    """Header (file name + actions) above the diff, or a blank-slate message."""
+    """Header (file name + actions) above the diff, or an empty state."""
 
     open_in_editor = Signal(str)
 
     def __init__(self, parent=None, show_header=True):
-        super().__init__(parent)
+        super().__init__(parent, objectName="MainArea")
+        self.setAttribute(Qt.WA_StyledBackground, True)
         layout = QVBoxLayout(self)
         layout.setContentsMargins(0, 0, 0, 0)
         layout.setSpacing(0)
 
         self.header = QWidget(objectName="DiffHeader")
+        self.header.setAttribute(Qt.WA_StyledBackground, True)
         hl = QHBoxLayout(self.header)
-        hl.setContentsMargins(12, 6, 8, 6)
+        hl.setContentsMargins(16, 8, 10, 8)
+        hl.setSpacing(10)
+        self.badge = QLabel()
+        self.badge.setFixedSize(22, 20)
+        hl.addWidget(self.badge)
         self.path_label = QLabel()
         self.path_label.setTextInteractionFlags(Qt.TextSelectableByMouse)
+        self.path_label.setTextFormat(Qt.RichText)
         hl.addWidget(self.path_label, 1)
-        self.editor_btn = QPushButton("Open in editor")
+        self.editor_btn = QPushButton(" Open in editor")
+        self.editor_btn.setIcon(icons.icon("code", theme.colors()["text_dim"]))
         self.editor_btn.clicked.connect(lambda: self.current_path and self.open_in_editor.emit(self.current_path))
         hl.addWidget(self.editor_btn)
         self.header.setVisible(False)
@@ -183,44 +253,59 @@ class DiffView(QWidget):
 
         self.stack = QStackedWidget()
         self.editor = DiffEditor()
-        self.message = QLabel(alignment=Qt.AlignCenter, wordWrap=True)
-        self.message.setObjectName("Dim")
-        self.message.setMargin(24)
+        self.empty = EmptyState()
+        self.message = self.empty
         self.stack.addWidget(self.editor)
-        self.stack.addWidget(self.message)
+        self.stack.addWidget(self.empty)
         layout.addWidget(self.stack, 1)
 
         self.current_path: Optional[str] = None
-        self.show_message("No file selected.")
+        self.show_message("No file selected", icon="changes")
 
-    def show_message(self, text: str):
+    def show_message(self, title: str, subtitle: str = "", icon: str = "sparkle", actions=None):
         self.current_path = None
         self.header.setVisible(False)
-        self.message.setText(text)
-        self.stack.setCurrentWidget(self.message)
+        self.empty.set_content(title, subtitle, icon, actions)
+        self.stack.setCurrentWidget(self.empty)
+
+    def _inline_message(self, title: str, icon: str):
+        """Message under a visible file header (binary/empty file)."""
+        self.empty.set_content(title, "", icon)
+        self.stack.setCurrentWidget(self.empty)
 
     def set_diff(self, path: str, diff_text: str, status: str = "M", can_open: bool = True):
         self.current_path = path
-        self.path_label.setText(f"<b>{_escape(path)}</b>"
-                                f" &nbsp;<span style='color:{theme.colors()['text_dim']}'>"
-                                f"{theme.STATUS_LABELS.get(status, '')}</span>")
+        folder, name = os.path.split(path)
+        dim = theme.colors()["text_dim"]
+        self.path_label.setText(
+            (f"<span style='color:{dim}'>{_escape(folder)}/</span>" if folder else "") + f"<b>{_escape(name)}</b>")
+        self.badge.setPixmap(_badge_pixmap(status, self.badge.size()))
+        self.badge.setToolTip(theme.STATUS_LABELS.get(status, ""))
         self.editor_btn.setVisible(can_open)
         self.header.setVisible(self.show_header)
 
         rows, binary = parse_diff(diff_text)
         if binary:
-            self.message.setText("This binary file has changed.")
-            self.stack.setCurrentWidget(self.message)
+            self._inline_message("This binary file has changed", "box")
             return
         if not rows:
-            text = "The file is empty." if status in ("A", "?") else "No content changes (e.g. mode change only)."
-            self.message.setText(text)
-            self.stack.setCurrentWidget(self.message)
+            self._inline_message("The file is empty" if status in ("A", "?") else "No content changes", "changes")
             return
         if len(rows) > MAX_DIFF_LINES:
             rows = rows[:MAX_DIFF_LINES] + [("meta", None, None, f"… diff truncated at {MAX_DIFF_LINES} lines")]
         self.editor.set_rows(rows)
         self.stack.setCurrentWidget(self.editor)
+
+
+def _badge_pixmap(status: str, size) -> QPixmap:
+    dpr = 2.0
+    pm = QPixmap(int(size.width() * dpr), int(size.height() * dpr))
+    pm.setDevicePixelRatio(dpr)
+    pm.fill(Qt.transparent)
+    p = QPainter(pm)
+    theme.paint_status_badge(p, QRectF(0, 0, size.width(), size.height()), status)
+    p.end()
+    return pm
 
 
 def _escape(text: str) -> str:

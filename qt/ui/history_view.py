@@ -2,55 +2,18 @@
 
 from typing import Callable, List, Optional
 
-from PySide6.QtCore import QRect, QSize, Qt, Signal
-from PySide6.QtGui import QColor, QFont, QGuiApplication, QPalette
+from PySide6.QtCore import QRectF, Qt, Signal
+from PySide6.QtGui import QGuiApplication, QPainter
 from PySide6.QtWidgets import (
-    QApplication, QHBoxLayout, QLabel, QListWidget, QListWidgetItem, QMenu, QPushButton,
-    QSplitter, QStyle, QStyledItemDelegate, QVBoxLayout, QWidget,
+    QHBoxLayout, QLabel, QListWidget, QListWidgetItem, QMenu, QPushButton, QSplitter,
+    QVBoxLayout, QWidget,
 )
 
-from ui import theme
+from ui import icons, theme
+from ui.delegates import COMMIT_ROLE, FILE_ROLE, CommitDelegate, FileDelegate
 from ui.diff_view import DiffView
 
-COMMIT_ROLE = Qt.UserRole
 PAGE_SIZE = 100
-
-
-class _CommitDelegate(QStyledItemDelegate):
-    """Two lines per commit: bold summary, then 'author • time ago'."""
-
-    def sizeHint(self, option, index):
-        fm = option.fontMetrics
-        return QSize(option.rect.width(), fm.height() * 2 + 14)
-
-    def paint(self, painter, option, index):
-        commit = index.data(COMMIT_ROLE) or {}
-        painter.save()
-        selected = option.state & QStyle.State_Selected
-        c = theme.colors()
-        if selected:
-            painter.fillRect(option.rect, QColor(c["selection"]))
-        r = option.rect.adjusted(10, 6, -10, -6)
-        bold = QFont(option.font)
-        bold.setWeight(QFont.DemiBold)
-        main_color = QColor(c["selection_text"] if selected else c["text"])
-        dim_color = QColor(c["selection_text"] if selected else c["text_dim"])
-
-        painter.setFont(bold)
-        painter.setPen(main_color)
-        line_h = option.fontMetrics.height()
-        summary = painter.fontMetrics().elidedText(commit.get("summary", ""), Qt.ElideRight, r.width())
-        painter.drawText(QRect(r.left(), r.top(), r.width(), line_h), Qt.AlignLeft | Qt.AlignVCenter, summary)
-
-        painter.setFont(option.font)
-        painter.setPen(dim_color)
-        sub = f"{commit.get('author', '')} • {commit.get('date', '')}"
-        sub = painter.fontMetrics().elidedText(sub, Qt.ElideRight, r.width())
-        painter.drawText(QRect(r.left(), r.top() + line_h + 2, r.width(), line_h), Qt.AlignLeft | Qt.AlignVCenter, sub)
-
-        painter.setPen(QColor(c["border"]))
-        painter.drawLine(option.rect.bottomLeft(), option.rect.bottomRight())
-        painter.restore()
 
 
 class HistoryList(QListWidget):
@@ -60,7 +23,8 @@ class HistoryList(QListWidget):
         super().__init__(parent)
         self._load_page = load_page
         self._exhausted = False
-        self.setItemDelegate(_CommitDelegate(self))
+        self.setItemDelegate(CommitDelegate(self))
+        self.setMouseTracking(True)
         self.setHorizontalScrollBarPolicy(Qt.ScrollBarAlwaysOff)
         self.setUniformItemSizes(True)
         self.currentItemChanged.connect(lambda item, _p: self.commit_selected.emit(item.data(COMMIT_ROLE) if item else {}))
@@ -112,9 +76,20 @@ class HistoryList(QListWidget):
             return
         commit = item.data(COMMIT_ROLE)
         menu = QMenu(self)
-        menu.addAction("Copy SHA", lambda: QGuiApplication.clipboard().setText(commit["hash"]))
+        menu.addAction(icons.icon("copy", theme.colors()["text_dim"]), "Copy SHA",
+                       lambda: QGuiApplication.clipboard().setText(commit["hash"]))
         menu.addAction("Copy summary", lambda: QGuiApplication.clipboard().setText(commit["summary"]))
         menu.exec(self.viewport().mapToGlobal(pos))
+
+
+class _AuthorAvatar(QWidget):
+    def __init__(self, parent=None):
+        super().__init__(parent)
+        self.setFixedSize(36, 36)
+        self.name = self.email = ""
+
+    def paintEvent(self, _e):
+        theme.paint_avatar(QPainter(self), QRectF(self.rect()), self.name, self.email)
 
 
 class CommitView(QWidget):
@@ -133,42 +108,53 @@ class CommitView(QWidget):
 
         self.header = QWidget(objectName="DiffHeader")
         self.header.setAttribute(Qt.WA_StyledBackground, True)
-        hl = QVBoxLayout(self.header)
-        hl.setContentsMargins(14, 10, 14, 10)
-        hl.setSpacing(4)
-        self.summary_label = QLabel(wordWrap=True)
-        f = self.summary_label.font()
-        f.setPointSizeF(f.pointSizeF() * 1.25)
-        f.setWeight(QFont.DemiBold)
-        self.summary_label.setFont(f)
+        hl = QHBoxLayout(self.header)
+        hl.setContentsMargins(18, 14, 14, 14)
+        hl.setSpacing(12)
+        self.avatar = _AuthorAvatar()
+        hl.addWidget(self.avatar, 0, Qt.AlignTop)
+        texts = QVBoxLayout()
+        texts.setSpacing(3)
+        self.summary_label = QLabel(wordWrap=True, objectName="Title")
         self.summary_label.setTextInteractionFlags(Qt.TextSelectableByMouse)
         self.summary_label.setTextFormat(Qt.PlainText)  # commit text is not markup
-        hl.addWidget(self.summary_label)
+        texts.addWidget(self.summary_label)
         self.body_label = QLabel(wordWrap=True)
         self.body_label.setTextInteractionFlags(Qt.TextSelectableByMouse)
         self.body_label.setTextFormat(Qt.PlainText)
-        hl.addWidget(self.body_label)
-        meta_row = QHBoxLayout()
+        texts.addWidget(self.body_label)
         self.meta_label = QLabel(objectName="Dim")
         self.meta_label.setTextFormat(Qt.PlainText)
         self.meta_label.setTextInteractionFlags(Qt.TextSelectableByMouse)
-        meta_row.addWidget(self.meta_label, 1)
-        self.copy_btn = QPushButton("Copy SHA")
+        texts.addWidget(self.meta_label)
+        hl.addLayout(texts, 1)
+        self.copy_btn = QPushButton(" Copy SHA")
+        self.copy_btn.setIcon(icons.icon("copy", theme.colors()["text_dim"]))
         self.copy_btn.clicked.connect(lambda: self.commit and QGuiApplication.clipboard().setText(self.commit["hash"]))
-        meta_row.addWidget(self.copy_btn)
-        hl.addLayout(meta_row)
+        hl.addWidget(self.copy_btn, 0, Qt.AlignTop)
         lay.addWidget(self.header)
 
         self.splitter = QSplitter(Qt.Horizontal)
+        self.splitter.setHandleWidth(1)
+        files_box = QWidget(objectName="Sidebar")
+        files_box.setAttribute(Qt.WA_StyledBackground, True)
+        fl = QVBoxLayout(files_box)
+        fl.setContentsMargins(0, 10, 0, 0)
+        fl.setSpacing(4)
+        self.files_count = QLabel(objectName="Dim")
+        self.files_count.setContentsMargins(18, 0, 0, 0)
+        fl.addWidget(self.files_count)
         self.files = QListWidget()
-        self.files.setTextElideMode(Qt.ElideLeft)
+        self.files.setItemDelegate(FileDelegate(self.files, checkable=False))
+        self.files.setMouseTracking(True)
         self.files.setHorizontalScrollBarPolicy(Qt.ScrollBarAlwaysOff)
         self.files.currentItemChanged.connect(self._on_file_changed)
+        fl.addWidget(self.files, 1)
         self.diff = DiffView(show_header=False)
-        self.splitter.addWidget(self.files)
+        self.splitter.addWidget(files_box)
         self.splitter.addWidget(self.diff)
         self.splitter.setStretchFactor(1, 1)
-        self.splitter.setSizes([260, 700])
+        self.splitter.setSizes([280, 700])
         lay.addWidget(self.splitter, 1)
 
     def show_commit(self, commit: dict):
@@ -179,31 +165,36 @@ class CommitView(QWidget):
         if not commit:
             self.summary_label.setText("No commits yet")
             self.body_label.clear()
+            self.body_label.setVisible(False)
             self.meta_label.clear()
-            self.diff.show_message("")
+            self.files_count.clear()
+            self.diff.show_message("Your first commit will show up here.", icon="history")
             return
         details = self.git.get_commit_details(commit["hash"]) or commit
+        self.avatar.name, self.avatar.email = details.get("author", ""), details.get("email", "")
+        self.avatar.update()
         self.summary_label.setText(details.get("summary", ""))
         self.body_label.setText(details.get("body", ""))
         self.body_label.setVisible(bool(details.get("body")))
         self.meta_label.setText(
-            f"{details.get('author', '')} <{details.get('email', '')}> · "
-            f"{details.get('full_date', details.get('date', ''))} · {details.get('short_hash', '')}"
+            f"{details.get('author', '')}  ·  {details.get('full_date', details.get('date', ''))}"
+            f"  ·  {details.get('short_hash', '')}"
         )
         files = self.git.get_commit_files(commit["hash"])
+        self.files_count.setText(f"{len(files)} changed file{'s' if len(files) != 1 else ''}")
         for f in files:
-            item = QListWidgetItem(theme.status_icon(f["status"]), f["path"])
-            item.setData(Qt.UserRole, f)
+            item = QListWidgetItem(f["path"])
+            item.setData(FILE_ROLE, f)
             item.setToolTip(f["path"])
             self.files.addItem(item)
         if files:
             self.files.setCurrentRow(0)
         else:
-            self.diff.show_message("This commit has no file changes.")
+            self.diff.show_message("This commit has no file changes.", icon="commit")
 
     def _on_file_changed(self, item, _prev):
         if not item or not self.commit:
             return
-        f = item.data(Qt.UserRole)
+        f = item.data(FILE_ROLE)
         diff = self.git.get_commit_file_diff(self.commit["hash"], f["path"], f.get("orig_path", ""))
         self.diff.set_diff(f["path"], diff, f["status"], can_open=False)

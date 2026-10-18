@@ -1,107 +1,101 @@
-"""GitHub Desktop look: colors (Primer palette), Qt palettes, stylesheet, status icons."""
+"""Modern, rounded look: colors, Qt palettes, stylesheet, status badges, avatars."""
+
+import hashlib
+import os
 
 from PySide6.QtCore import QRectF, Qt
-from PySide6.QtGui import QColor, QFont, QIcon, QPainter, QPalette, QPen, QPixmap
+from PySide6.QtGui import QColor, QFont, QPalette
 from PySide6.QtWidgets import QApplication
 
+from ui import icons
+
 LIGHT = {
-    "bg": "#ffffff",
-    "bg_alt": "#f6f8fa",
-    "border": "#e1e4e8",
-    "text": "#24292e",
-    "text_dim": "#586069",
-    "blue": "#0366d6",
-    "blue_disabled": "#94bfea",
-    "selection": "#0366d6",
-    "selection_text": "#ffffff",
-    "toolbar_bg": "#24292e",
-    "toolbar_hover": "#2f363d",
-    "toolbar_open": "#ffffff",
-    "toolbar_open_text": "#24292e",
-    "toolbar_text": "#ffffff",
-    "toolbar_caption": "#959da5",
-    "banner_bg": "#fffbdd",
-    "banner_border": "#e5d68e",
-    "diff_add_bg": "#e6ffed",
-    "diff_add_gutter": "#cdffd8",
-    "diff_del_bg": "#ffeef0",
-    "diff_del_gutter": "#ffdce0",
-    "diff_hunk_bg": "#f1f8ff",
-    "diff_hunk_text": "#586069",
+    "bg": "#f5f6f8",          # window background
+    "surface": "#ffffff",     # toolbar, sidebar, cards
+    "surface2": "#f0f2f5",    # inputs, segmented control, secondary buttons
+    "hover": "#e8ebf0",
+    "border": "#e1e4ea",
+    "text": "#1f2328",
+    "text_dim": "#656d76",
+    "accent": "#2f6feb",
+    "accent_hover": "#2563d9",
+    "accent_text": "#ffffff",
+    "accent_soft": "#e4edfd",
+    "warn_soft": "#fff6db",
+    "warn_border": "#f0d58a",
+    "diff_add_bg": "#e9f8ee",
+    "diff_add_gutter": "#d3f2dd",
+    "diff_del_bg": "#fdecee",
+    "diff_del_gutter": "#fad7db",
+    "diff_hunk_bg": "#eef3ff",
+    "diff_hunk_text": "#57606a",
     "diff_gutter": "#ffffff",
-    "diff_gutter_text": "#959da5",
-    "added": "#28a745",
-    "modified": "#dbab09",
-    "deleted": "#d73a49",
-    "renamed": "#0366d6",
-    "conflicted": "#d73a49",
+    "diff_gutter_text": "#8c959f",
+    "added": "#1a7f37",
+    "modified": "#9a6700",
+    "deleted": "#cf222e",
+    "renamed": "#0969da",
+    "conflicted": "#cf222e",
 }
 
 DARK = {
-    "bg": "#24292e",
-    "bg_alt": "#1f2428",
-    "border": "#141414",
-    "text": "#d1d5da",
-    "text_dim": "#959da5",
-    "blue": "#2f81f7",
-    "blue_disabled": "#2d4a6e",
-    "selection": "#1f6feb",
-    "selection_text": "#ffffff",
-    "toolbar_bg": "#1f2428",
-    "toolbar_hover": "#2f363d",
-    "toolbar_open": "#24292e",
-    "toolbar_open_text": "#ffffff",
-    "toolbar_text": "#ffffff",
-    "toolbar_caption": "#959da5",
-    "banner_bg": "#3b3221",
-    "banner_border": "#6b5a2b",
-    "diff_add_bg": "#1f3a2a",
-    "diff_add_gutter": "#244a33",
-    "diff_del_bg": "#41262a",
-    "diff_del_gutter": "#542d32",
-    "diff_hunk_bg": "#1c2b3c",
-    "diff_hunk_text": "#959da5",
-    "diff_gutter": "#24292e",
-    "diff_gutter_text": "#6a737d",
-    "added": "#34d058",
-    "modified": "#ffdf5d",
-    "deleted": "#ea4a5a",
-    "renamed": "#79b8ff",
-    "conflicted": "#ea4a5a",
+    "bg": "#14161b",
+    "surface": "#1b1e25",
+    "surface2": "#242833",
+    "hover": "#2b303c",
+    "border": "#2c313c",
+    "text": "#e6e8ee",
+    "text_dim": "#9aa3b2",
+    "accent": "#4c8dff",
+    "accent_hover": "#5f9aff",
+    "accent_text": "#ffffff",
+    "accent_soft": "#1f2c47",
+    "warn_soft": "#2e2817",
+    "warn_border": "#5c4b1f",
+    "diff_add_bg": "#12261d",
+    "diff_add_gutter": "#183426",
+    "diff_del_bg": "#2a1619",
+    "diff_del_gutter": "#3b1d22",
+    "diff_hunk_bg": "#172036",
+    "diff_hunk_text": "#8ea4d2",
+    "diff_gutter": "#1b1e25",
+    "diff_gutter_text": "#5d6575",
+    "added": "#3fb950",
+    "modified": "#d29922",
+    "deleted": "#f85149",
+    "renamed": "#58a6ff",
+    "conflicted": "#f85149",
 }
 
-_current = dict(LIGHT)
+_current = dict(DARK)
+_dark = True
 
 
 def colors() -> dict:
-    """Colors of the active theme."""
     return _current
+
+
+def is_dark() -> bool:
+    return _dark
 
 
 def system_prefers_dark(app: QApplication) -> bool:
     try:
         return app.styleHints().colorScheme() == Qt.ColorScheme.Dark
-    except AttributeError:  # very old Qt: guess from the default palette
+    except AttributeError:
         return app.palette().window().color().lightness() < 128
 
 
 def _palette(c: dict) -> QPalette:
     p = QPalette()
     roles = {
-        QPalette.Window: c["bg"],
-        QPalette.WindowText: c["text"],
-        QPalette.Base: c["bg"],
-        QPalette.AlternateBase: c["bg_alt"],
-        QPalette.Text: c["text"],
-        QPalette.Button: c["bg_alt"],
-        QPalette.ButtonText: c["text"],
-        QPalette.Highlight: c["selection"],
-        QPalette.HighlightedText: c["selection_text"],
-        QPalette.ToolTipBase: c["bg_alt"],
-        QPalette.ToolTipText: c["text"],
-        QPalette.PlaceholderText: c["text_dim"],
-        QPalette.Link: c["blue"],
-        QPalette.Mid: c["border"],
+        QPalette.Window: c["bg"], QPalette.WindowText: c["text"],
+        QPalette.Base: c["surface"], QPalette.AlternateBase: c["surface2"],
+        QPalette.Text: c["text"], QPalette.Button: c["surface2"], QPalette.ButtonText: c["text"],
+        QPalette.Highlight: c["accent"], QPalette.HighlightedText: c["accent_text"],
+        QPalette.ToolTipBase: c["surface"], QPalette.ToolTipText: c["text"],
+        QPalette.PlaceholderText: c["text_dim"], QPalette.Link: c["accent"],
+        QPalette.Mid: c["border"], QPalette.Light: c["surface"], QPalette.Dark: c["border"],
     }
     for role, value in roles.items():
         p.setColor(role, QColor(value))
@@ -110,124 +104,230 @@ def _palette(c: dict) -> QPalette:
     return p
 
 
+def _asset_dir() -> str:
+    """Stylesheets can only load images from files: write the few we need to the cache."""
+    base = os.environ.get("XDG_CACHE_HOME") or os.path.expanduser("~/.cache")
+    path = os.path.join(base, "git-desktop-linux", "qss")
+    os.makedirs(path, exist_ok=True)
+    return path
+
+
+def _write_asset(name: str, svg_bytes: bytes) -> str:
+    path = os.path.join(_asset_dir(), name)
+    try:
+        with open(path, "wb") as f:
+            f.write(svg_bytes)
+    except OSError:
+        return ""
+    return path.replace("\\", "/")
+
+
 def _stylesheet(c: dict) -> str:
+    check = _write_asset("check.svg", icons.svg("check", "#ffffff"))
+    dash = _write_asset("dash.svg", b'<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24">'
+                                    b'<path d="M6 12h12" stroke="#ffffff" stroke-width="3" stroke-linecap="round"/></svg>')
+    chevron = _write_asset(f"chevron-{c['text_dim'][1:]}.svg", icons.svg("chevron-down", c["text_dim"]))
     return f"""
+    * {{ outline: 0; }}
     QMainWindow, QDialog {{ background: {c['bg']}; }}
     QSplitter::handle {{ background: {c['border']}; }}
-    QToolTip {{ color: {c['text']}; background: {c['bg_alt']}; border: 1px solid {c['border']}; }}
+    QToolTip {{ color: {c['text']}; background: {c['surface']}; border: 1px solid {c['border']};
+               border-radius: 6px; padding: 4px 8px; }}
+    QLabel {{ background: transparent; }}
 
-    /* ---------- toolbar (always dark, like GitHub Desktop) ---------- */
-    #Toolbar {{ background: {c['toolbar_bg']}; border-bottom: 1px solid #000; }}
-    #ToolbarButton {{
-        background: transparent; border: none; border-right: 1px solid #000;
-        color: {c['toolbar_text']}; text-align: left; padding: 0;
-    }}
-    #ToolbarButton:hover {{ background: {c['toolbar_hover']}; }}
-    #ToolbarButton[open="true"] {{ background: {c['toolbar_open']}; }}
-    #ToolbarButton[open="true"] QLabel {{ color: {c['toolbar_open_text']}; }}
-    #ToolbarCaption {{ color: {c['toolbar_caption']}; font-size: 11px; }}
-    #ToolbarTitle {{ color: {c['toolbar_text']}; font-weight: 600; }}
-    #ToolbarIcon, #ToolbarArrow {{ color: {c['toolbar_text']}; }}
-    /* Qt ignores an ancestor's :disabled in descendant selectors, so style the labels themselves */
-    #ToolbarTitle:disabled, #ToolbarIcon:disabled, #ToolbarArrow:disabled, #ToolbarCaption:disabled {{ color: #6a737d; }}
+    /* ---------------- toolbar ---------------- */
+    #Toolbar {{ background: {c['surface']}; border-bottom: 1px solid {c['border']}; }}
+    #ToolbarButton {{ background: transparent; border: 1px solid transparent; border-radius: 10px; }}
+    #ToolbarButton:hover {{ background: {c['hover']}; }}
+    #ToolbarButton[open="true"] {{ background: {c['surface2']}; border: 1px solid {c['border']}; }}
+    #ToolbarCaption {{ color: {c['text_dim']}; font-size: 11px; }}
+    #ToolbarTitle {{ color: {c['text']}; font-weight: 600; }}
+    #ToolbarTitle:disabled, #ToolbarCaption:disabled {{ color: {c['text_dim']}; }}
+    #ToolbarDivider {{ background: {c['border']}; }}
+    #CountBadge {{ background: {c['accent']}; color: {c['accent_text']}; border-radius: 8px;
+                  padding: 0 6px; font-size: 11px; font-weight: 600; }}
 
-    /* ---------- sidebar ---------- */
-    #Sidebar {{ background: {c['bg']}; }}
-    QTabBar::tab {{
-        background: {c['bg']}; color: {c['text']}; padding: 8px 12px;
-        border: none; border-bottom: 1px solid {c['border']};
+    /* ---------------- sidebar ---------------- */
+    #Sidebar {{ background: {c['surface']}; }}
+    #Segmented {{ background: {c['surface2']}; border-radius: 10px; }}
+    #Segmented QTabBar::tab {{
+        background: transparent; color: {c['text_dim']}; border: none; border-radius: 8px;
+        padding: 6px 10px; margin: 3px; font-weight: 600;
     }}
-    QTabBar::tab:selected {{ border-bottom: 2px solid {c['blue']}; font-weight: 600; }}
-    QTabBar::tab:hover:!selected {{ background: {c['bg_alt']}; }}
-    #SectionHeader {{ background: {c['bg_alt']}; border-bottom: 1px solid {c['border']}; }}
-    QListWidget, QListView {{
-        background: {c['bg']}; border: none; outline: 0;
-    }}
-    QListWidget::item {{ padding: 4px 6px; }}
-    QListWidget::item:selected {{ background: {c['selection']}; color: {c['selection_text']}; }}
+    #Segmented QTabBar::tab:selected {{ background: {c['surface'] if not _dark else c['hover']}; color: {c['text']}; }}
+    #Segmented QTabBar::tab:hover:!selected {{ color: {c['text']}; }}
+    #SectionHeader {{ background: transparent; }}
 
-    #CommitBox {{ background: {c['bg_alt']}; border-top: 1px solid {c['border']}; }}
-    QLineEdit, QPlainTextEdit {{
-        background: {c['bg']}; color: {c['text']};
-        border: 1px solid {c['border']}; border-radius: 4px; padding: 4px 6px;
-        selection-background-color: {c['selection']};
+    QListWidget, QListView {{ background: transparent; border: none; }}
+    QListWidget::item {{ border-radius: 8px; margin: 1px 6px; padding: 6px 6px; color: {c['text']}; }}
+    QListWidget::item:hover {{ background: {c['hover']}; }}
+    QListWidget::item:selected {{ background: {c['accent_soft']}; color: {c['text']}; }}
+
+    QCheckBox {{ spacing: 8px; color: {c['text']}; }}
+    QCheckBox::indicator, QListView::indicator {{
+        width: 16px; height: 16px; border-radius: 5px;
+        border: 1.5px solid {c['text_dim']}; background: transparent;
     }}
-    QLineEdit:focus, QPlainTextEdit:focus {{ border: 1px solid {c['blue']}; }}
+    QCheckBox::indicator:hover, QListView::indicator:hover {{ border-color: {c['accent']}; }}
+    QCheckBox::indicator:checked, QListView::indicator:checked {{
+        background: {c['accent']}; border-color: {c['accent']}; image: url({check});
+    }}
+    QCheckBox::indicator:indeterminate, QListView::indicator:indeterminate {{
+        background: {c['accent']}; border-color: {c['accent']}; image: url({dash});
+    }}
+    QCheckBox::indicator:disabled {{ border-color: {c['border']}; }}
+
+    /* ---------------- inputs & buttons ---------------- */
+    QLineEdit, QPlainTextEdit, QComboBox {{
+        background: {c['surface2']}; color: {c['text']};
+        border: 1px solid {c['border']}; border-radius: 8px; padding: 6px 10px;
+        selection-background-color: {c['accent']}; selection-color: {c['accent_text']};
+    }}
+    QLineEdit:focus, QPlainTextEdit:focus, QComboBox:focus {{ border: 1px solid {c['accent']}; background: {c['surface']}; }}
+    QComboBox::drop-down {{ border: none; width: 24px; }}
+    QComboBox::down-arrow {{ image: url({chevron}); width: 14px; height: 14px; }}
+    QComboBox QAbstractItemView {{ background: {c['surface']}; border: 1px solid {c['border']};
+                                   border-radius: 8px; selection-background-color: {c['accent_soft']}; }}
+
+    QPushButton, QToolButton {{
+        background: {c['surface2']}; color: {c['text']}; border: 1px solid {c['border']};
+        border-radius: 8px; padding: 6px 14px;
+    }}
+    QPushButton:hover, QToolButton:hover {{ background: {c['hover']}; }}
+    QPushButton:pressed, QToolButton:pressed {{ background: {c['border']}; }}
+    QPushButton:disabled, QToolButton:disabled {{ color: {c['text_dim']}; }}
+    QToolButton::menu-indicator {{ image: none; width: 0; }}
+    QDialogButtonBox {{ dialogbuttonbox-buttons-have-icons: 0; }}
     #PrimaryButton {{
-        background: {c['blue']}; color: #ffffff; border: none; border-radius: 4px;
-        padding: 6px 12px; font-weight: 600;
+        background: {c['accent']}; color: {c['accent_text']}; border: none;
+        border-radius: 8px; padding: 9px 14px; font-weight: 600;
     }}
-    #PrimaryButton:disabled {{ background: {c['blue_disabled']}; color: #e8f1fb; }}
-    #PrimaryButton:hover:!disabled {{ background: #035fc7; }}
-    #Banner {{ background: {c['banner_bg']}; border-top: 1px solid {c['banner_border']}; }}
+    #PrimaryButton:hover {{ background: {c['accent_hover']}; }}
+    #PrimaryButton:disabled {{ background: {c['surface2']}; color: {c['text_dim']}; border: 1px solid {c['border']}; }}
+    #FlatButton {{ background: transparent; border: none; border-radius: 8px; padding: 6px; }}
+    #FlatButton:hover {{ background: {c['hover']}; }}
+    #MenuButton {{ background: transparent; border: none; border-radius: 8px; padding: 7px 8px;
+                   text-align: left; color: {c['text']}; }}
+    #MenuButton:hover {{ background: {c['hover']}; }}
+    #LinkButton {{ background: transparent; border: none; color: {c['accent']}; padding: 2px 4px; font-weight: 600; }}
+    #LinkButton:hover {{ text-decoration: underline; }}
+
+    /* ---------------- cards ---------------- */
+    #CommitBox {{ background: {c['surface']}; border-top: 1px solid {c['border']}; }}
+    #Banner {{ background: {c['accent_soft']}; border-radius: 10px; }}
+    #Banner[warn="true"] {{ background: {c['warn_soft']}; border: 1px solid {c['warn_border']}; }}
+    #Card {{ background: {c['surface']}; border: 1px solid {c['border']}; border-radius: 12px; }}
+    #Card:hover {{ border-color: {c['accent']}; }}
     #Dim {{ color: {c['text_dim']}; }}
-    #BlankTitle {{ font-size: 20px; font-weight: 600; }}
+    #Title {{ font-size: 15px; font-weight: 600; color: {c['text']}; }}
+    #BigTitle {{ font-size: 22px; font-weight: 700; color: {c['text']}; }}
+    #EmptyIcon {{ background: {c['surface2']}; border-radius: 36px; }}
 
-    /* ---------- popups ---------- */
-    #Popup {{ background: {c['bg']}; border: 1px solid {c['border']}; }}
-    #PopupHeader {{ background: {c['bg_alt']}; border-bottom: 1px solid {c['border']}; }}
-    #ListSection {{ color: {c['text_dim']}; font-weight: 600; }}
+    /* ---------------- popups & menus ---------------- */
+    #PopupCard {{ background: {c['surface']}; border: 1px solid {c['border']}; border-radius: 12px; }}
+    QMenu {{ background: {c['surface']}; border: 1px solid {c['border']}; border-radius: 8px; padding: 4px; }}
+    QMenu::item {{ padding: 6px 22px 6px 12px; border-radius: 6px; color: {c['text']}; }}
+    QMenu::item:selected {{ background: {c['accent_soft']}; }}
+    QMenu::item:disabled {{ color: {c['text_dim']}; }}
+    QMenu::separator {{ height: 1px; background: {c['border']}; margin: 4px 8px; }}
+    QMenuBar {{ background: {c['surface']}; color: {c['text']}; }}
+    QMenuBar::item {{ padding: 4px 10px; border-radius: 6px; background: transparent; }}
+    QMenuBar::item:selected {{ background: {c['hover']}; }}
 
-    /* ---------- diff ---------- */
-    #DiffHeader {{ background: {c['bg_alt']}; border-bottom: 1px solid {c['border']}; }}
-    #DiffEditor {{ border: none; border-radius: 0; padding: 0; }}
+    /* ---------------- diff ---------------- */
+    #DiffHeader {{ background: {c['surface']}; border-bottom: 1px solid {c['border']}; }}
+    #DiffEditor {{ background: {c['surface']}; border: none; border-radius: 0; padding: 0; }}
+    #MainArea {{ background: {c['surface']}; }}
+
+    /* ---------------- tabs in dialogs ---------------- */
+    QTabWidget::pane {{ border: 1px solid {c['border']}; border-radius: 10px; background: {c['surface']}; top: -1px; }}
+    QTabWidget > QTabBar::tab {{ background: transparent; color: {c['text_dim']}; padding: 8px 14px;
+                                 border: none; border-bottom: 2px solid transparent; }}
+    QTabWidget > QTabBar::tab:selected {{ color: {c['text']}; border-bottom: 2px solid {c['accent']}; }}
+    QProgressBar {{ background: {c['surface2']}; border: none; border-radius: 4px; height: 6px; }}
+    QProgressBar::chunk {{ background: {c['accent']}; border-radius: 4px; }}
+
+    /* ---------------- scrollbars ---------------- */
+    QScrollBar:vertical {{ background: transparent; width: 10px; margin: 2px; }}
+    QScrollBar:horizontal {{ background: transparent; height: 10px; margin: 2px; }}
+    QScrollBar::handle {{ background: {c['border']}; border-radius: 3px; min-height: 30px; min-width: 30px; }}
+    QScrollBar::handle:hover {{ background: {c['text_dim']}; }}
+    QScrollBar::add-line, QScrollBar::sub-line {{ width: 0; height: 0; }}
+    QScrollBar::add-page, QScrollBar::sub-page {{ background: transparent; }}
     """
 
 
 def apply_theme(app: QApplication, mode: str = "system") -> bool:
     """mode: 'system' | 'light' | 'dark'. Returns True when dark is active."""
-    dark = system_prefers_dark(app) if mode == "system" else mode == "dark"
+    global _dark
+    _dark = system_prefers_dark(app) if mode == "system" else mode == "dark"
     _current.clear()
-    _current.update(DARK if dark else LIGHT)
+    _current.update(DARK if _dark else LIGHT)
+    icons.clear_cache()
     app.setStyle("Fusion")
+    font = app.font()
+    if font.pointSizeF() < 10:  # 9pt system fonts look cramped in this layout
+        font.setPointSizeF(10)
+        app.setFont(font)
     app.setPalette(_palette(_current))
     app.setStyleSheet(_stylesheet(_current))
-    return dark
+    return _dark
 
 
-# status -> (color key, glyph)
-_STATUS = {
-    "A": ("added", "+"),
-    "?": ("added", "+"),
-    "C": ("added", "+"),
-    "M": ("modified", "•"),
-    "D": ("deleted", "−"),
-    "R": ("renamed", "→"),
-    "U": ("conflicted", "!"),
-}
-
-_icon_cache: dict = {}
+# ---------------- status badges & avatars ----------------
+STATUS_LETTER = {"A": "A", "?": "U", "C": "C", "M": "M", "D": "D", "R": "R", "U": "!"}
+STATUS_COLOR = {"A": "added", "?": "added", "C": "added", "M": "modified",
+                "D": "deleted", "R": "renamed", "U": "conflicted"}
+STATUS_LABELS = {"A": "Added", "?": "New", "C": "Copied", "M": "Modified",
+                 "D": "Deleted", "R": "Renamed", "U": "Conflicted"}
 
 
-def status_icon(status: str) -> QIcon:
-    """Small rounded square with a glyph, like GitHub Desktop's file status icons."""
-    key_name, glyph = _STATUS.get(status, _STATUS["M"])
-    color = QColor(_current[key_name])
-    cache_key = (status, color.name())
-    if cache_key in _icon_cache:
-        return _icon_cache[cache_key]
-
-    size = 32  # drawn large, Qt scales it down crisply
-    pm = QPixmap(size, size)
-    pm.fill(Qt.transparent)
-    p = QPainter(pm)
-    p.setRenderHint(QPainter.Antialiasing)
-    p.setPen(QPen(color, 3))
-    p.setBrush(Qt.NoBrush)
-    p.drawRoundedRect(QRectF(3, 3, size - 6, size - 6), 6, 6)
-    font = QFont()
-    font.setPixelSize(22)
-    font.setBold(True)
-    p.setFont(font)
-    p.drawText(QRectF(0, -1, size, size), Qt.AlignCenter, glyph)
-    p.end()
-
-    icon = QIcon(pm)
-    _icon_cache[cache_key] = icon
-    return icon
+def status_color(status: str) -> QColor:
+    return QColor(_current[STATUS_COLOR.get(status, "modified")])
 
 
-STATUS_LABELS = {
-    "A": "Added", "?": "New", "C": "Copied", "M": "Modified",
-    "D": "Deleted", "R": "Renamed", "U": "Conflicted",
-}
+def paint_status_badge(painter, rect: QRectF, status: str):
+    """Small rounded pill with a letter (M, A, D…) in the status color."""
+    color = status_color(status)
+    bg = QColor(color)
+    bg.setAlphaF(0.16)
+    painter.save()
+    painter.setRenderHint(painter.RenderHint.Antialiasing)
+    painter.setPen(Qt.NoPen)
+    painter.setBrush(bg)
+    painter.drawRoundedRect(rect, 5, 5)
+    f = QFont(painter.font())
+    f.setPixelSize(int(rect.height() * 0.62))
+    f.setBold(True)
+    painter.setFont(f)
+    painter.setPen(color)
+    painter.drawText(rect, Qt.AlignCenter, STATUS_LETTER.get(status, "M"))
+    painter.restore()
+
+
+_AVATAR_COLORS = ["#e5534b", "#c69026", "#57ab5a", "#39c5cf", "#539bf5", "#986ee2", "#e275ad", "#f69d50"]
+
+
+def avatar_color(seed: str) -> QColor:
+    digest = hashlib.md5((seed or "?").lower().encode()).digest()
+    return QColor(_AVATAR_COLORS[digest[0] % len(_AVATAR_COLORS)])
+
+
+def initials(name: str) -> str:
+    parts = [p for p in (name or "?").replace(".", " ").split() if p]
+    return (parts[0][0] + (parts[1][0] if len(parts) > 1 else "")).upper() if parts else "?"
+
+
+def paint_avatar(painter, rect: QRectF, name: str, seed: str = ""):
+    painter.save()
+    painter.setRenderHint(painter.RenderHint.Antialiasing)
+    painter.setPen(Qt.NoPen)
+    painter.setBrush(avatar_color(seed or name))
+    painter.drawEllipse(rect)
+    f = QFont(painter.font())
+    f.setPixelSize(int(rect.height() * 0.42))
+    f.setBold(True)
+    painter.setFont(f)
+    painter.setPen(QColor("#ffffff"))
+    painter.drawText(rect, Qt.AlignCenter, initials(name))
+    painter.restore()

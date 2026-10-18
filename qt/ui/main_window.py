@@ -7,7 +7,7 @@ import time
 from typing import Optional
 
 from PySide6.QtCore import QEvent, QFile, QSettings, Qt, QTimer, QUrl
-from PySide6.QtGui import QAction, QDesktopServices, QGuiApplication, QKeySequence
+from PySide6.QtGui import QAction, QDesktopServices, QGuiApplication, QKeySequence, QPixmap
 from PySide6.QtWidgets import (
     QApplication, QFileDialog, QHBoxLayout, QLabel, QMainWindow, QMessageBox, QPushButton,
     QSplitter, QStackedWidget, QTabBar, QVBoxLayout, QWidget,
@@ -15,10 +15,11 @@ from PySide6.QtWidgets import (
 
 from git_service import GitService
 from github_service import GitHubService
-from ui import theme
+from ui import icons, theme
+from ui.account import AccountPopup, ProfileButton, SignInDialog
 from ui.changes_view import ChangesView
 from ui.dialogs import BranchNameDialog, CloneDialog, CreateRepoDialog, MergeDialog, OptionsDialog
-from ui.diff_view import DiffView
+from ui.diff_view import DiffView, EmptyState
 from ui.history_view import CommitView, HistoryList
 from ui.toolbar import BranchPopup, RepositoryPopup, ToolbarButton
 from ui.workers import run_async
@@ -52,10 +53,17 @@ class MainWindow(QMainWindow):
         self._last_refresh = 0.0
         self._undo_hash = ""           # HEAD right after a commit made here
         self._undo_message = ("", "")
+        self.github_repos = None       # every repository of the GitHub account (None = not loaded)
+        self.github_login = ""
+        self.github_profile = None     # dict from the API while signed in
+        self.github_avatar = None      # QPixmap once downloaded
+        self._signed_out = False
+        self._account_loading = True
 
         self._build_toolbar()
         self._build_body()
         self._build_menus()
+        self._refresh_icons()
 
         geometry = self.settings.value("geometry")
         if geometry is not None:
@@ -81,21 +89,39 @@ class MainWindow(QMainWindow):
         bar = QWidget(objectName="Toolbar")
         bar.setAttribute(Qt.WA_StyledBackground, True)
         lay = QHBoxLayout(bar)
-        lay.setContentsMargins(0, 0, 0, 0)
-        lay.setSpacing(0)
+        lay.setContentsMargins(8, 6, 8, 6)
+        lay.setSpacing(4)
 
-        self.repo_btn = ToolbarButton("▣", "Current repository", width=260)
+        self.repo_btn = ToolbarButton("repo", "Current repository", width=270)
         self.repo_btn.clicked.connect(self.show_repository_list)
-        self.branch_btn = ToolbarButton("⎇", "Current branch", width=240)
+        self.branch_btn = ToolbarButton("branch", "Current branch", width=240)
         self.branch_btn.clicked.connect(self.show_branch_list)
-        self.sync_btn = ToolbarButton("⟳", "Never fetched", dropdown=False, width=230)
+        self.sync_btn = ToolbarButton("sync", "Never fetched", dropdown=False, width=240)
         self.sync_btn.clicked.connect(lambda: self.sync())
-        for b in (self.repo_btn, self.branch_btn, self.sync_btn):
+        for i, b in enumerate((self.repo_btn, self.branch_btn, self.sync_btn)):
+            if i:
+                divider = QWidget(objectName="ToolbarDivider")
+                divider.setAttribute(Qt.WA_StyledBackground, True)
+                divider.setFixedSize(1, 28)
+                lay.addWidget(divider)
             lay.addWidget(b)
         lay.addStretch(1)
+        self.settings_btn = QPushButton(objectName="FlatButton")
+        self.settings_btn.setToolTip("Options (Ctrl+,)")
+        self.settings_btn.setFixedSize(36, 36)
+        self.settings_btn.clicked.connect(self.show_options)
+        lay.addWidget(self.settings_btn)
+        self.profile_btn = ProfileButton()
+        self.profile_btn.clicked.connect(self.show_account_menu)
+        lay.addWidget(self.profile_btn)
+
+        self.account_popup = AccountPopup(self)
+        self.account_popup.sign_in.connect(self.sign_in)
+        self.account_popup.sign_out.connect(self.sign_out)
+        self.account_popup.options.connect(self.show_options)
 
         self.repo_popup = RepositoryPopup(self)
-        self.repo_popup.activated.connect(lambda path, _k: self.open_repository(path))
+        self.repo_popup.activated.connect(self._on_repo_popup_activated)
         self.repo_popup.add_existing.connect(self.add_existing_repository)
         self.repo_popup.clone.connect(self.clone_repository)
         self.repo_popup.create.connect(self.create_repository)
@@ -124,8 +150,14 @@ class MainWindow(QMainWindow):
         # ---- sidebar ----
         sidebar = QWidget(objectName="Sidebar")
         sl = QVBoxLayout(sidebar)
+        sidebar.setAttribute(Qt.WA_StyledBackground, True)
         sl.setContentsMargins(0, 0, 0, 0)
         sl.setSpacing(0)
+        # Changes | History as a segmented control
+        segmented = QWidget(objectName="Segmented")
+        segmented.setAttribute(Qt.WA_StyledBackground, True)
+        seg_lay = QHBoxLayout(segmented)
+        seg_lay.setContentsMargins(0, 0, 0, 0)
         self.tabs = QTabBar()
         self.tabs.setExpanding(True)
         self.tabs.setDocumentMode(True)
@@ -133,7 +165,11 @@ class MainWindow(QMainWindow):
         self.tabs.addTab("Changes")
         self.tabs.addTab("History")
         self.tabs.currentChanged.connect(self._on_tab_changed)
-        sl.addWidget(self.tabs)
+        seg_lay.addWidget(self.tabs)
+        seg_wrap = QHBoxLayout()
+        seg_wrap.setContentsMargins(12, 12, 12, 4)
+        seg_wrap.addWidget(segmented)
+        sl.addLayout(seg_wrap)
 
         self.side_stack = QStackedWidget()
         self.changes = ChangesView()
@@ -172,22 +208,15 @@ class MainWindow(QMainWindow):
         self.setCentralWidget(central)
 
     def _build_blank_slate(self) -> QWidget:
-        w = QWidget()
-        lay = QVBoxLayout(w)
-        lay.setAlignment(Qt.AlignCenter)
-        title = QLabel("Let's get started!", objectName="BlankTitle", alignment=Qt.AlignCenter)
-        lay.addWidget(title)
-        lay.addWidget(QLabel("Add a repository to Git Desktop to start collaborating",
-                             objectName="Dim", alignment=Qt.AlignCenter))
-        lay.addSpacing(16)
-        for text, slot in (("Clone a repository from the Internet…", self.clone_repository),
-                           ("Create a New Repository on your hard drive…", self.create_repository),
-                           ("Add an Existing Repository from your hard drive…", self.add_existing_repository)):
-            btn = QPushButton(text)
-            btn.setMinimumWidth(380)
-            btn.setMinimumHeight(36)
-            btn.clicked.connect(slot)
-            lay.addWidget(btn, alignment=Qt.AlignCenter)
+        w = EmptyState()
+        w.set_content(
+            "Let's get started!",
+            "Add a repository to Git Desktop to start collaborating.",
+            "sparkle",
+            [("Clone a repository from the Internet", "Ctrl+Shift+O", "cloud-down", self.clone_repository),
+             ("Create a new repository", "Ctrl+N", "plus", self.create_repository),
+             ("Add an existing repository", "Ctrl+O", "folder", self.add_existing_repository)])
+        w.title.setObjectName("BigTitle")
         return w
 
     def _build_menus(self):
@@ -209,6 +238,7 @@ class MainWindow(QMainWindow):
         act(m, "Add local repository…", self.add_existing_repository, "Ctrl+O", False)
         act(m, "Clone repository…", self.clone_repository, "Ctrl+Shift+O", False)
         m.addSeparator()
+        act(m, "GitHub account…", self.show_account_menu, None, False)
         act(m, "Options…", self.show_options, "Ctrl+,", False)
         m.addSeparator()
         act(m, "Exit", self.close, "Ctrl+Q", False)
@@ -301,6 +331,7 @@ class MainWindow(QMainWindow):
 
         merging = self.git.is_merging()
         self.changes.set_branch(branch, merging)
+        self.changes.set_identity(*self.git.get_user_info())
         self.changes.set_files(self.git.get_status_files())
         self.changes.stash_banner.setVisible(bool(self.git.get_desktop_stash(branch)))
 
@@ -322,21 +353,21 @@ class MainWindow(QMainWindow):
         has_remote = bool(self.git.git_remote_list())
         if not has_remote:
             self._sync_mode = "none"
-            self.sync_btn.set_texts("No remote", "Add a remote to publish", "⟳")
+            self.sync_btn.set_texts("No remote", "Add a remote to publish", "sync")
             self.sync_btn.setEnabled(False)
         elif not sync["has_upstream"]:
             self._sync_mode = "publish"
-            self.sync_btn.set_texts("Publish branch", "Publish this branch to origin", "↑")
+            self.sync_btn.set_texts("Publish branch", "Publish this branch to origin", "upload")
         elif sync["behind"] > 0:
             self._sync_mode = "pull"
             extra = f"  ↑{sync['ahead']}" if sync["ahead"] else ""
-            self.sync_btn.set_texts("Pull origin", f"↓{sync['behind']}{extra}  {time_ago(self.git.get_last_fetch_time())}", "↓")
+            self.sync_btn.set_texts("Pull origin", f"↓{sync['behind']}{extra}  ·  {time_ago(self.git.get_last_fetch_time())}", "arrow-down")
         elif sync["ahead"] > 0:
             self._sync_mode = "push"
-            self.sync_btn.set_texts("Push origin", f"↑{sync['ahead']}  {time_ago(self.git.get_last_fetch_time())}", "↑")
+            self.sync_btn.set_texts("Push origin", f"↑{sync['ahead']}  ·  {time_ago(self.git.get_last_fetch_time())}", "arrow-up")
         else:
             self._sync_mode = "fetch"
-            self.sync_btn.set_texts("Fetch origin", time_ago(self.git.get_last_fetch_time()), "⟳")
+            self.sync_btn.set_texts("Fetch origin", time_ago(self.git.get_last_fetch_time()), "sync")
         return sync
 
     def event(self, e):
@@ -380,7 +411,19 @@ class MainWindow(QMainWindow):
         if self.tabs.currentIndex() != 0:
             return
         if not f:
-            self.diff.show_message("No local changes.\n\nThere are no uncommitted changes in this repository.")
+            # GitHub Desktop-style suggestions when the working tree is clean
+            actions = [
+                ("Open the repository in your editor", "Ctrl+Shift+A", "code", lambda: self.open_in_editor()),
+                ("Show in your file manager", "Ctrl+Shift+F", "folder", lambda: self.show_in_file_manager()),
+                ("Open in terminal", "Ctrl+`", "terminal", self.open_in_terminal),
+            ]
+            sync = self.git.get_sync_status()
+            if sync["ahead"]:
+                actions.insert(0, (f"Push {sync['ahead']} commit{'s' if sync['ahead'] > 1 else ''} to origin",
+                                   "Ctrl+P", "arrow-up", lambda: self.sync("push")))
+            self.diff.show_message("No local changes",
+                                   "There are no uncommitted changes in this repository. Here are some friendly suggestions:",
+                                   "check", actions)
             return
         self.diff.set_diff(f["path"], self.git.get_diff(f["path"]), f["status"], can_open=f["status"] != "D")
 
@@ -392,9 +435,20 @@ class MainWindow(QMainWindow):
     # Popups & repository management
     # ======================================================================
     def show_repository_list(self):
-        self.repo_popup.set_repositories(self.gh.get_recent_repos(), self.git.repo_path)
+        self._fill_repo_popup()
         self.repo_btn.set_open(True)
         self.repo_popup.popup_below(self.repo_btn)
+
+    def _fill_repo_popup(self):
+        recent = self.gh.get_recent_repos()
+        if self.github_repos is None:
+            state = "signed_out" if self._signed_out else "loading"
+        else:
+            state = "ok"
+        self.repo_popup.set_repositories(recent, self.git.repo_path, self.github_repos or [], state,
+                                         self._local_full_names(recent), self.github_login)
+        # keep what the user typed in the filter when the list refills
+        self.repo_popup._apply_filter(self.repo_popup.filter.text())
 
     def show_branch_list(self):
         if not self.git.is_git_repo():
@@ -421,10 +475,32 @@ class MainWindow(QMainWindow):
                 return
         self.open_repository(path)
 
-    def clone_repository(self):
-        dlg = CloneDialog(self.gh, self)
-        if dlg.exec() and dlg.result_path:
+    def clone_repository(self, preselect: str = ""):
+        dlg = CloneDialog(self.gh, self, repos=self.github_repos, preselect=preselect, me=self.github_login)
+        accepted = dlg.exec()
+        if dlg.repositories():
+            self.github_repos = dlg.repositories()  # the dialog may have reloaded them
+        if accepted and dlg.result_path:
             self.open_repository(dlg.result_path)
+
+    def _on_repo_popup_activated(self, value: str, kind: str):
+        if kind == "repo":
+            self.open_repository(value)
+        elif kind == "github":
+            self.clone_repository(preselect=value)
+        elif kind == "signin":
+            self.sign_in()
+
+    @staticmethod
+    def _local_full_names(recent) -> set:
+        """'owner/name' of recent repositories whose origin is on github.com."""
+        names = set()
+        for r in recent:
+            url = GitService(r["path"]).get_remote_url("origin")
+            if "github.com" in url:
+                tail = url.split("github.com", 1)[1].lstrip(":/")
+                names.add(tail[:-4] if tail.endswith(".git") else tail)
+        return names
 
     def create_repository(self):
         dlg = CreateRepoDialog(self.gh, self)
@@ -660,7 +736,7 @@ class MainWindow(QMainWindow):
         label, job = jobs[mode]
         self._busy = True
         self.sync_btn.setEnabled(False)
-        self.sync_btn.set_texts(label, "", "⟳")
+        self.sync_btn.set_texts(label, "Working…", "sync")
 
         def finished(result):
             self._busy = False
@@ -681,9 +757,76 @@ class MainWindow(QMainWindow):
         return msg
 
     def _load_token(self):
-        def done(token):
-            self.git.github_token = token
-        run_async(self.gh.get_token, on_done=done)
+        """Token, profile and the account's repositories, all in the background."""
+        self.github_repos = None
+        self._signed_out = False
+        self._account_loading = True
+
+        def load():
+            token = self.gh.get_token()
+            if not token:
+                return None, None, None
+            profile = self.gh.get_user_profile(token=token)
+            if not profile:  # token revoked/expired: behave as signed out
+                return None, None, None
+            return token, profile, self.gh.get_user_repos()
+
+        def done(result):
+            token, profile, repos = result
+            self._apply_account(token, profile, repos)
+
+        def failed(_err):
+            self._apply_account(None, None, None)
+
+        run_async(load, on_done=done, on_error=failed)
+
+    def _apply_account(self, token, profile, repos):
+        self._account_loading = False
+        self.git.github_token = token
+        self.github_profile = profile
+        self.github_login = (profile or {}).get("login", "")
+        self._signed_out = profile is None
+        self.github_repos = repos if profile else None
+        self.github_avatar = None
+        self.profile_btn.set_profile(profile)
+        if profile and profile.get("avatar_url"):
+            def got_avatar(data):
+                pm = QPixmap()
+                if data and pm.loadFromData(data) and self.github_profile is profile:
+                    self.github_avatar = pm
+                    self.profile_btn.set_profile(profile, pm)
+                    if self.account_popup.isVisible():
+                        self._fill_account_popup()
+            run_async(self.gh.get_avatar, profile["avatar_url"], on_done=got_avatar)
+        if self.repo_popup.isVisible():
+            self._fill_repo_popup()
+        if self.account_popup.isVisible():
+            self._fill_account_popup()
+
+    # ---- account ----
+    def show_account_menu(self):
+        self._fill_account_popup()
+        self.account_popup.popup_below(self.profile_btn)
+
+    def _fill_account_popup(self):
+        count = len(self.github_repos) if self.github_repos is not None else None
+        self.account_popup.set_profile(self.github_profile, self.github_avatar, count,
+                                       loading=self._account_loading)
+
+    def sign_in(self):
+        dlg = SignInDialog(self.gh, self)
+        if dlg.exec():
+            self._load_token()
+
+    def sign_out(self):
+        login = self.github_login or "your account"
+        if QMessageBox.question(self, "Sign out",
+                                f"Sign out of {login}?\n\nYour local repositories stay as they are.") != QMessageBox.Yes:
+            return
+        self.gh.logout()
+        self._apply_account(None, None, None)
+        # straight to the sign-in screen, once the confirmation box has closed
+        QTimer.singleShot(0, self.sign_in)
 
     # ======================================================================
     # Integrations
@@ -712,6 +855,9 @@ class MainWindow(QMainWindow):
         if accepted:
             from ui.theme import apply_theme
             apply_theme(QApplication.instance(), self.gh.get_setting("theme", "system"))
+            self._refresh_icons()
+            for banner in (self.changes.merge_banner, self.changes.stash_banner, self.changes.undo_banner):
+                banner.refresh_icon()
             self.refresh(force=True)
         if dlg.account_changed:
             self._load_token()
@@ -723,6 +869,12 @@ class MainWindow(QMainWindow):
             "A simple Git client for Linux, modeled on "
             "<a href='https://github.com/desktop/desktop'>GitHub Desktop</a>.<br><br>"
             "Developer: Kağan Efe TOPÇU (<a href='https://github.com/kefy266'>@kefy266</a>)")
+
+    def _refresh_icons(self):
+        """Icons are tinted pixmaps: redo them after a theme change."""
+        self.settings_btn.setIcon(icons.icon("settings", theme.colors()["text_dim"], 18))
+        for b in (self.repo_btn, self.branch_btn, self.sync_btn):
+            b.refresh_icons()
 
     def _error(self, title: str, msg: str):
         QMessageBox.warning(self, title, msg or "An unknown error occurred.")

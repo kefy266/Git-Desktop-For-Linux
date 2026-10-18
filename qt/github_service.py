@@ -121,37 +121,68 @@ class GitHubService:
             print(f"GitHub API Error: {e}")
         return None
 
+    def get_avatar(self, avatar_url: str, size: int = 96) -> bytes:
+        """Avatar image bytes (PNG/JPEG). Network call: run it off the GUI thread."""
+        if not avatar_url:
+            return b""
+        sep = "&" if "?" in avatar_url else "?"
+        try:
+            res = requests.get(f"{avatar_url}{sep}s={size}", timeout=8,
+                               headers={"User-Agent": "GitDesktopLinux"})
+            return res.content if res.status_code == 200 else b""
+        except Exception:
+            return b""
+
     # ==================== ONLINE REPOSITORIES ====================
-    def get_user_repos(self, limit: int = 50) -> List[Dict[str, Any]]:
+    MAX_REPO_PAGES = 30  # 30 × 100 = 3000 repositories
+
+    def get_user_repos(self, limit: Optional[int] = None) -> List[Dict[str, Any]]:
+        """All repositories the account can access: own, collaborator and organization ones.
+
+        GitHub returns at most 100 per request, so follow the `Link: rel="next"` pages.
+        Network call: run it off the GTK/Qt main thread.
+        """
         token = self.get_token()
         if not token:
             return []
 
         headers = {
             "Authorization": f"token {token}",
-            "Accept": "application/vnd.github.v3+json",
+            "Accept": "application/vnd.github+json",
             "User-Agent": "GitDesktopLinux"
         }
+        url = ("https://api.github.com/user/repos?sort=updated&per_page=100"
+               "&affiliation=owner,collaborator,organization_member")
+        repos: List[Dict[str, Any]] = []
         try:
-            url = f"https://api.github.com/user/repos?sort=updated&per_page={limit}"
-            res = requests.get(url, headers=headers, timeout=8)
-            if res.status_code == 200:
-                repos = []
+            for _ in range(self.MAX_REPO_PAGES):
+                res = requests.get(url, headers=headers, timeout=10)
+                if res.status_code != 200:
+                    break
                 for item in res.json():
+                    owner = (item.get("owner") or {}).get("login", "")
                     repos.append({
                         "name": item.get("name"),
                         "full_name": item.get("full_name"),
+                        "owner": owner,
                         "description": item.get("description") or "",
                         "clone_url": item.get("clone_url"),
                         "ssh_url": item.get("ssh_url"),
+                        "html_url": item.get("html_url"),
                         "is_private": item.get("private", False),
+                        "is_fork": item.get("fork", False),
+                        "is_archived": item.get("archived", False),
                         "stars": item.get("stargazers_count", 0),
-                        "updated_at": item.get("updated_at", "")[:10]
+                        "updated_at": (item.get("updated_at") or "")[:10]
                     })
-                return repos
+                if limit and len(repos) >= limit:
+                    return repos[:limit]
+                url = res.links.get("next", {}).get("url")
+                if not url:
+                    break
         except Exception as e:
             print(f"Error fetching repos: {e}")
-        return []
+        return repos
 
     def clone_repo(self, repo_url: str, target_dir: str) -> Tuple[bool, str]:
         # Signed-in token lets private https://github.com repos clone without a prompt

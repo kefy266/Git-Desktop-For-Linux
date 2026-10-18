@@ -34,7 +34,7 @@ github_service.subprocess.run = lambda args, *a, **kw: (
     subprocess.CompletedProcess(args, 1, "", "") if args and args[0] == "gh" else _real_run(args, *a, **kw))
 
 from PySide6.QtCore import Qt  # noqa: E402
-from PySide6.QtWidgets import QApplication, QMessageBox  # noqa: E402
+from PySide6.QtWidgets import QApplication, QDialog, QLabel, QMessageBox, QPushButton  # noqa: E402
 
 app = QApplication.instance() or QApplication([])
 
@@ -226,6 +226,26 @@ class TestMainWindow(UICase):
         self.assertEqual(w.changes.summary.text(), "Sadece seç")
         self.assertEqual(len(self.git.get_status_files()), 2)
 
+    def test_file_rows_paint_and_toggle_checkbox(self):
+        from PySide6.QtCore import QEvent, QPointF
+        from PySide6.QtGui import QMouseEvent
+        from PySide6.QtWidgets import QStyleOptionViewItem
+        from ui.delegates import is_checked
+        self.write("a.txt")
+        w = self.open()
+        lst = w.changes.list
+        index = lst.model().index(0, 0)
+        self.assertTrue(is_checked(index))  # delegate must see the item as checked
+        option = QStyleOptionViewItem()
+        option.rect = lst.visualRect(index)
+        delegate = lst.itemDelegate()
+        box = delegate._checkbox_rect(option).center()
+        click = QMouseEvent(QEvent.MouseButtonRelease, QPointF(box), QPointF(box),
+                            Qt.LeftButton, Qt.LeftButton, Qt.NoModifier)
+        delegate.editorEvent(click, lst.model(), option, index)
+        self.assertFalse(is_checked(index))
+        self.assertFalse(w.changes.commit_btn.isEnabled() and w.changes.checked_files())
+
     def test_commit_disabled_without_summary(self):
         self.write("a.txt")
         w = self.open()
@@ -314,6 +334,204 @@ class TestMainWindow(UICase):
         self.assertTrue(theme.apply_theme(app, "dark"))
         self.assertEqual(theme.colors()["bg"], theme.DARK["bg"])
         theme.apply_theme(app, "light")
+
+
+
+
+# ==================== GitHub repositories ====================
+def _fake_repo(owner, name, **extra):
+    return {"name": name, "full_name": f"{owner}/{name}", "owner": {"login": owner},
+            "description": extra.get("description", ""), "clone_url": f"https://github.com/{owner}/{name}.git",
+            "ssh_url": "", "html_url": "", "private": extra.get("private", False), "fork": False,
+            "archived": False, "stargazers_count": 0, "updated_at": "2026-10-01T00:00:00Z"}
+
+
+class _FakeResponse:
+    def __init__(self, items, next_url=None):
+        self.status_code = 200
+        self._items = items
+        self.links = {"next": {"url": next_url}} if next_url else {}
+
+    def json(self):
+        return self._items
+
+
+class TestGitHubRepos(unittest.TestCase):
+    def setUp(self):
+        self.gh = github_service.GitHubService()
+        self.gh.get_token = lambda: "ghp_test"
+        self._orig_get = github_service.requests.get
+
+    def tearDown(self):
+        github_service.requests.get = self._orig_get
+
+    def test_follows_all_pages(self):
+        pages = {
+            "p1": _FakeResponse([_fake_repo("me", f"r{i}") for i in range(100)], "p2"),
+            "p2": _FakeResponse([_fake_repo("org", f"o{i}") for i in range(100)], "p3"),
+            "p3": _FakeResponse([_fake_repo("org", "last")]),
+        }
+        calls = []
+
+        def fake_get(url, headers=None, timeout=None):
+            calls.append(url)
+            return pages["p1"] if "api.github.com" in url else pages[url]
+
+        github_service.requests.get = fake_get
+        repos = self.gh.get_user_repos()
+        self.assertEqual(len(repos), 201)  # used to stop at 100
+        self.assertEqual(len(calls), 3)
+        self.assertIn("affiliation=owner,collaborator,organization_member", calls[0])
+        self.assertEqual(repos[-1]["owner"], "org")
+
+    def test_grouping_puts_me_first(self):
+        from ui.delegates import group_repos
+        repos = [{"full_name": f"{o}/x", "owner": o} for o in ("zeta-org", "me", "acme")]
+        self.assertEqual([o for o, _ in group_repos(repos, "me")], ["me", "acme", "zeta-org"])
+
+
+class TestRepoPopupGitHub(UICase):
+    def _github_repos(self):
+        return [{"name": n, "full_name": f"{o}/{n}", "owner": o, "description": "", "clone_url": "",
+                 "is_private": False, "is_fork": False, "is_archived": False, "updated_at": ""}
+                for o, n in (("me", "app"), ("me", "dotfiles"), ("acme", "site"))]
+
+    def test_popup_lists_account_repos_grouped(self):
+        self.write("a.txt")
+        self.commit_all()
+        w = self.open()
+        w.github_repos, w.github_login = self._github_repos(), "me"
+        w.show_repository_list()
+        texts = [w.repo_popup.list.item(i).text().strip() for i in range(w.repo_popup.list.count())]
+        self.assertIn("GITHUB.COM · ME", texts)
+        self.assertIn("GITHUB.COM · ACME", texts)
+        self.assertLess(texts.index("GITHUB.COM · ME"), texts.index("GITHUB.COM · ACME"))
+        self.assertIn("dotfiles", texts)
+        w.repo_popup.hide()
+
+    def test_cloned_repo_not_listed_twice(self):
+        self.write("a.txt")
+        self.commit_all()
+        self.git.git_remote_add("origin", "https://github.com/me/app.git")
+        w = self.open()
+        w.github_repos, w.github_login = self._github_repos(), "me"
+        w.show_repository_list()
+        github_entries = [w.repo_popup.list.item(i).data(Qt.UserRole) for i in range(w.repo_popup.list.count())
+                          if w.repo_popup.list.item(i).data(Qt.UserRole + 1) == "github"]
+        self.assertNotIn("me/app", github_entries)
+        self.assertIn("me/dotfiles", github_entries)
+        w.repo_popup.hide()
+
+    def test_signed_out_shows_sign_in_entry(self):
+        w = self.open()
+        w.github_repos, w._signed_out = None, True
+        w.show_repository_list()
+        kinds = [w.repo_popup.list.item(i).data(Qt.UserRole + 1) for i in range(w.repo_popup.list.count())]
+        self.assertIn("signin", kinds)
+        w.repo_popup.hide()
+
+    def test_clone_dialog_preselects_and_groups(self):
+        from ui.dialogs import CloneDialog
+        from ui.delegates import REPO_ROLE
+        dlg = CloneDialog(github_service.GitHubService(), repos=self._github_repos(), preselect="me/dotfiles", me="me")
+        self.assertEqual(dlg.repo_list.currentItem().data(REPO_ROLE)["full_name"], "me/dotfiles")
+        self.assertTrue(dlg.path_edit.text().endswith("dotfiles"))
+        self.assertEqual(dlg.owner_combo.count(), 3)  # All + me + acme
+        dlg.owner_combo.setCurrentIndex(dlg.owner_combo.findData("acme"))
+        names = [dlg.repo_list.item(i).text() for i in range(dlg.repo_list.count())
+                 if dlg.repo_list.item(i).data(REPO_ROLE)]
+        self.assertEqual(names, ["acme/site"])
+        self.assertIn("3 repositories from 2 accounts", dlg.gh_status.text())
+
+
+# ==================== account: sign in / sign out ====================
+class TestAccount(UICase):
+    PROFILE = {"login": "kefy266", "name": "Kağan Efe", "avatar_url": "", "html_url": "https://github.com/kefy266"}
+
+    def setUp(self):
+        super().setUp()
+        self.gh_cls = github_service.GitHubService
+        self._orig = (self.gh_cls.get_user_profile, self.gh_cls.get_user_repos)
+        valid = "ghp_valid"
+        self.gh_cls.get_user_profile = lambda s, token=None: dict(self.PROFILE) if (token or s.get_token()) == valid else None
+        self.gh_cls.get_user_repos = lambda s, limit=None: [{"name": "app", "full_name": "kefy266/app", "owner": "kefy266",
+                                                              "description": "", "clone_url": "", "is_private": False,
+                                                              "is_fork": False, "is_archived": False, "updated_at": ""}]
+
+    def tearDown(self):
+        self.gh_cls.get_user_profile, self.gh_cls.get_user_repos = self._orig
+        github_service.GitHubService().logout()
+        super().tearDown()
+
+    def popup_texts(self, w):
+        return [lbl.text() for lbl in w.account_popup.findChildren(QLabel)] + \
+               [b.text().strip() for b in w.account_popup.findChildren(QPushButton)]
+
+    def test_signed_out_card_offers_sign_in(self):
+        w = self.open()
+        self.settle()
+        self.assertIsNone(w.github_profile)
+        w.show_account_menu()
+        self.settle()
+        self.assertIn("Sign in to GitHub.com", self.popup_texts(w))
+        w.account_popup.hide()
+
+    def test_sign_in_dialog_rejects_bad_token_then_signs_in(self):
+        from ui.account import SignInDialog
+        gh = github_service.GitHubService()
+        dlg = SignInDialog(gh)
+        dlg.token_edit.setText("ghp_wrong")
+        dlg._sign_in()
+        self.settle()
+        self.assertFalse(dlg.status.isHidden())
+        self.assertIsNone(gh.config.get("token"))  # bad token is never saved
+        dlg.token_edit.setText("ghp_valid")
+        dlg._sign_in()
+        self.settle()
+        self.assertEqual(dlg.result(), QDialog.Accepted)
+        self.assertEqual(github_service.GitHubService().config.get("token"), "ghp_valid")
+
+    def test_signed_in_profile_then_sign_out(self):
+        github_service.GitHubService().set_token("ghp_valid")
+        w = self.open()
+        self.settle()
+        self.assertEqual(w.github_login, "kefy266")
+        self.assertEqual(w.git.github_token, "ghp_valid")
+        self.assertEqual(w.profile_btn.toolTip(), "Signed in as @kefy266")
+        w.show_account_menu()
+        texts = self.popup_texts(w)
+        self.assertIn("Kağan Efe", texts)
+        self.assertIn("@kefy266", texts)
+        self.assertIn("1 repositories on GitHub.com", texts)
+        self.assertIn("Sign out", texts)
+        w.account_popup.hide()
+
+        from ui import account
+        opened = []
+        orig_q, orig_exec = QMessageBox.question, account.SignInDialog.exec
+        QMessageBox.question = staticmethod(lambda *a, **k: QMessageBox.Yes)
+        account.SignInDialog.exec = lambda dlg: opened.append(dlg) or 0  # user cancels
+        try:
+            w.sign_out()
+            app.processEvents()
+        finally:
+            QMessageBox.question, account.SignInDialog.exec = orig_q, orig_exec
+        self.assertEqual(len(opened), 1)  # sign-in screen opens right after signing out
+        self.assertIsNone(w.github_profile)
+        self.assertIsNone(w.git.github_token)
+        self.assertIsNone(w.github_repos)
+        self.assertIsNone(github_service.GitHubService().get_token())
+        w.show_repository_list()
+        kinds = [w.repo_popup.list.item(i).data(Qt.UserRole + 1) for i in range(w.repo_popup.list.count())]
+        self.assertIn("signin", kinds)
+        w.repo_popup.hide()
+
+    def test_revoked_token_counts_as_signed_out(self):
+        github_service.GitHubService().set_token("ghp_revoked")
+        w = self.open()
+        self.settle()
+        self.assertIsNone(w.github_profile)
+        self.assertIsNone(w.git.github_token)
 
 
 if __name__ == "__main__":

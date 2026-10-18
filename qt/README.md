@@ -28,7 +28,9 @@ python3 -m venv --system-site-packages .venv
 
 **Diğer:** merge (çakışma şeridi + Abort merge), stash, Options (GitHub hesabı, git kimliği, editör, terminal, açık/koyu/sistem teması), açılışta ve pencere odaklanınca durum yenileme, 30 dakikada bir arka planda fetch.
 
-**GitHub girişi:** Options → Accounts'tan token ile ya da `gh` CLI girişiyle. HTTPS push/pull/clone bu hesabı kullanır; token komut satırında görünmez.
+**GitHub hesabı:** sağ üstteki avatara tıkla. Giriş yapılmışsa profil kartı (ad, kullanıcı adı, repo sayısı, *Your profile on GitHub*, *Sign out*), yapılmamışsa *Sign in to GitHub.com*. Giriş, kişisel erişim token'ı ile yapılır (kaydetmeden önce GitHub'da doğrulanır) ya da `gh auth login` sonrası *Check again* ile. HTTPS push/pull/clone bu hesabı kullanır; token komut satırında görünmez ve ayar dosyası sadece sana açıktır (0600).
+
+**GitHub repoların:** hesabındaki tüm repolar (100 sınırı yok; kendi, iş birliği yaptığın ve organizasyonlarındakiler) *Current repository* listesinde sahibine göre gruplu görünür. Bilgisayarında olanlar tekrar listelenmez, tıklayınca Clone penceresi o repo seçili açılır.
 
 ## Kısayollar
 

@@ -1,7 +1,7 @@
 """Dialogs: clone, create, branch name, merge, options."""
 
 import os
-from typing import List
+from typing import List, Optional
 
 from PySide6.QtCore import Qt
 from PySide6.QtWidgets import (
@@ -10,6 +10,8 @@ from PySide6.QtWidgets import (
     QRadioButton, QTabWidget, QVBoxLayout, QWidget,
 )
 
+from ui import icons, theme
+from ui.delegates import REPO_ROLE, SECTION_ROLE, RepoDelegate, group_repos
 from ui.workers import run_async
 
 
@@ -43,15 +45,18 @@ def _error_label() -> QLabel:
 
 # ==================== CLONE ====================
 class CloneDialog(QDialog):
-    """GitHub.com tab (your repositories) and URL tab, like GitHub Desktop."""
+    """GitHub.com tab (every repository of the account, grouped by owner) and URL tab."""
 
-    def __init__(self, gh_service, parent=None):
+    def __init__(self, gh_service, parent=None, repos: Optional[List[dict]] = None,
+                 preselect: str = "", me: str = ""):
         super().__init__(parent)
         self.setWindowTitle("Clone a repository")
-        self.resize(560, 520)
+        self.resize(640, 600)
         self.gh = gh_service
         self.result_path = ""
         self._repos: List[dict] = []
+        self._preselect = preselect
+        self._me = me
 
         lay = QVBoxLayout(self)
         self.tabs = QTabWidget()
@@ -60,11 +65,28 @@ class CloneDialog(QDialog):
         # --- GitHub.com tab ---
         gh_tab = QWidget()
         gl = QVBoxLayout(gh_tab)
+        top = QHBoxLayout()
         self.gh_filter = QLineEdit(placeholderText="Filter your repositories")
+        self.gh_filter.setClearButtonEnabled(True)
+        self.gh_filter.addAction(icons.icon("search", theme.colors()["text_dim"]), QLineEdit.LeadingPosition)
         self.gh_filter.textChanged.connect(self._fill_repo_list)
-        gl.addWidget(self.gh_filter)
+        top.addWidget(self.gh_filter, 1)
+        self.owner_combo = QComboBox()
+        self.owner_combo.setMinimumWidth(150)
+        self.owner_combo.currentIndexChanged.connect(self._fill_repo_list)
+        top.addWidget(self.owner_combo)
+        self.refresh_btn = QPushButton(objectName="FlatButton")
+        self.refresh_btn.setIcon(icons.icon("sync", theme.colors()["text_dim"]))
+        self.refresh_btn.setToolTip("Reload repositories from GitHub")
+        self.refresh_btn.clicked.connect(self._load_repos)
+        top.addWidget(self.refresh_btn)
+        gl.addLayout(top)
         self.repo_list = QListWidget()
+        self.repo_list.setItemDelegate(RepoDelegate(self.repo_list))
+        self.repo_list.setMouseTracking(True)
+        self.repo_list.setHorizontalScrollBarPolicy(Qt.ScrollBarAlwaysOff)
         self.repo_list.currentItemChanged.connect(self._on_repo_picked)
+        self.repo_list.itemDoubleClicked.connect(lambda _i: self._clone())
         gl.addWidget(self.repo_list, 1)
         self.gh_status = QLabel("Loading your repositories…", objectName="Dim")
         gl.addWidget(self.gh_status)
@@ -102,28 +124,77 @@ class CloneDialog(QDialog):
         lay.addWidget(self.buttons)
 
         self._parent_dir = _default_parent_dir()
-        run_async(self.gh.get_user_repos, 100, on_done=self._on_repos_loaded,
-                  on_error=lambda e: self.gh_status.setText(f"Could not load repositories: {e}"))
+        if repos:
+            self._on_repos_loaded(repos)  # already fetched by the main window
+        else:
+            self._load_repos()
+
+    def repositories(self) -> List[dict]:
+        return list(self._repos)
+
+    def _load_repos(self):
+        self.gh_status.setText("Loading your repositories…")
+        self.refresh_btn.setEnabled(False)
+
+        def failed(err):
+            self.refresh_btn.setEnabled(True)
+            self.gh_status.setText(f"Could not load repositories: {err}")
+
+        run_async(self.gh.get_user_repos, on_done=self._on_repos_loaded, on_error=failed)
 
     def _on_repos_loaded(self, repos):
+        self.refresh_btn.setEnabled(True)
         self._repos = repos or []
         if not self._repos:
             self.gh_status.setText("Sign in under Options → Accounts to see your repositories, or use the URL tab.")
             self.tabs.setCurrentIndex(1)
         else:
-            self.gh_status.setText(f"{len(self._repos)} repositories")
+            owners = len({r.get("owner") for r in self._repos})
+            self.gh_status.setText(f"{len(self._repos)} repositories from {owners} account"
+                                   f"{'s' if owners != 1 else ''}")
+        # owner filter: "All accounts" + each owner (signed-in user first)
+        current_owner = self.owner_combo.currentData()
+        self.owner_combo.blockSignals(True)
+        self.owner_combo.clear()
+        self.owner_combo.addItem("All accounts", "")
+        for owner, items in group_repos(self._repos, self._me):
+            self.owner_combo.addItem(f"{owner} ({len(items)})", owner)
+        if current_owner:
+            self.owner_combo.setCurrentIndex(max(0, self.owner_combo.findData(current_owner)))
+        self.owner_combo.blockSignals(False)
         self._fill_repo_list()
 
     def _fill_repo_list(self, *_):
-        text = self.gh_filter.text().lower()
+        text = self.gh_filter.text().lower().strip()
+        only_owner = self.owner_combo.currentData() or ""
+        current = self.repo_list.currentItem()
+        selected = self._preselect or ((current.data(REPO_ROLE) or {}).get("full_name", "") if current else "")
+        self.repo_list.blockSignals(True)
         self.repo_list.clear()
-        for r in self._repos:
-            if text and text not in r["full_name"].lower():
+        select_item = None
+        for owner, items in group_repos(self._repos, self._me):
+            if only_owner and owner != only_owner:
                 continue
-            item = QListWidgetItem(("🔒 " if r["is_private"] else "") + r["full_name"])
-            item.setData(Qt.UserRole, r)
-            item.setToolTip(r["description"])
-            self.repo_list.addItem(item)
+            matches = [r for r in items if not text or text in r["full_name"].lower()
+                       or text in r["description"].lower()]
+            if not matches:
+                continue
+            header = QListWidgetItem()
+            header.setFlags(Qt.NoItemFlags)
+            header.setData(SECTION_ROLE, f"{owner} · {len(matches)}")
+            self.repo_list.addItem(header)
+            for r in matches:
+                item = QListWidgetItem(r["full_name"])
+                item.setData(REPO_ROLE, r)
+                item.setToolTip(r["description"] or r["full_name"])
+                self.repo_list.addItem(item)
+                if r["full_name"] == selected:
+                    select_item = item
+        self.repo_list.blockSignals(False)
+        if select_item:
+            self.repo_list.setCurrentItem(select_item)
+            self.repo_list.scrollToItem(select_item)
+        self._preselect = ""
 
     def _on_repo_picked(self, item, _prev):
         self._suggest_path()
@@ -131,7 +202,8 @@ class CloneDialog(QDialog):
     def _clone_url(self) -> str:
         if self.tabs.currentIndex() == 0:
             item = self.repo_list.currentItem()
-            return item.data(Qt.UserRole)["clone_url"] if item else ""
+            repo = item.data(REPO_ROLE) if item else None
+            return repo["clone_url"] if repo else ""
         url = self.url_edit.text().strip()
         # "owner/repo" shorthand, as GitHub Desktop accepts
         if url and "://" not in url and "@" not in url and url.count("/") == 1:
@@ -139,8 +211,10 @@ class CloneDialog(QDialog):
         return url
 
     def _suggest_path(self, *_):
+        item = self.repo_list.currentItem() if self.tabs.currentIndex() == 0 else None
+        repo = item.data(REPO_ROLE) if item else None
         url = self._clone_url()
-        name = url.rstrip("/").split("/")[-1].split(":")[-1]
+        name = repo["name"] if repo else url.rstrip("/").split("/")[-1].split(":")[-1]
         if name.endswith(".git"):
             name = name[:-4]
         if name:
