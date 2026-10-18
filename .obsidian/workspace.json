@@ -13,12 +13,12 @@
             "state": {
               "type": "markdown",
               "state": {
-                "file": "file:/home/kagan/Origin Edge/bilgiler.md",
+                "file": "file:/home/kagan/Edge/_tasarim/marka-kimligi.md",
                 "mode": "source",
                 "source": false
               },
               "icon": "lucide-file",
-              "title": "bilgiler"
+              "title": "marka-kimligi"
             }
           }
         ]
@@ -189,8 +189,9 @@
       "bases:Yeni taban oluştur": false
     }
   },
-  "active": "f6267a3d6d959f75",
+  "active": "be3de460ff0e96de",
   "lastOpenFiles": [
+    "file:/home/kagan/Origin Edge/bilgiler.md",
     "qt/ui/account.py",
     "qt/ui/account.py.tmp.15515.3d8806051130",
     "qt/ui/history_view.py.tmp.15515.bad9b16bab7e",
@@ -202,11 +203,9 @@
     "qt/ui/icons.py.tmp.15515.0b6d3eedff10",
     "qt/README.md",
     "qt/README.md.tmp.15515.72a3aabd8b71",
-    "qt/tests/__init__.py",
     "qt/venv/lib/python3.14/site-packages/pip-26.2.1.dist-info/licenses/src/pip/_vendor/idna/LICENSE.md",
     "qt/venv/lib/python3.14/site-packages/pip/_vendor/idna/LICENSE.md",
     "file:/home/kagan/Edge/bilgiler.md",
-    "file:/home/kagan/Origin Edge/bilgiler.md",
     "freebuff/README.md",
     "antigravty/README.md",
     "README.md"
