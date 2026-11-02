@@ -1,0 +1,236 @@
+<!doctype html>
+<html lang="tr">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <title>Git Desktop For Linux</title>
+  <meta name="description" content="GitHub Desktop'tan ilham alan, C ve GTK4 ile yazılmış, Linux için hızlı ve sade bir Git masaüstü uygulaması.">
+  <meta property="og:title" content="Git Desktop For Linux">
+  <meta property="og:description" content="A fast, simple Git desktop app for Linux, written in C with GTK4 and libadwaita.">
+  <meta property="og:image" content="assets/changes-dark.png">
+  <meta name="theme-color" content="#14161b" media="(prefers-color-scheme: dark)">
+  <meta name="theme-color" content="#f5f6f8" media="(prefers-color-scheme: light)">
+  <link rel="icon" href="assets/icon.svg" type="image/svg+xml">
+  <link rel="stylesheet" href="style.css">
+</head>
+<body>
+  <header class="nav">
+    <a class="brand" href="#top">
+      <img src="assets/icon.svg" alt="" width="28" height="28">
+      <span>Git Desktop For Linux</span>
+    </a>
+    <nav>
+      <a href="#features"><span class="tr">Özellikler</span><span class="en">Features</span></a>
+      <a href="#screens"><span class="tr">Ekranlar</span><span class="en">Screens</span></a>
+      <a href="#install"><span class="tr">Kurulum</span><span class="en">Install</span></a>
+      <button class="lang" type="button" aria-label="Dili değiştir / Switch language">EN</button>
+      <a class="gh" href="https://github.com/kefy266/Git-Desktop-For-Linux" aria-label="GitHub">
+        <svg viewBox="0 0 24 24" width="20" height="20" aria-hidden="true"><path fill="currentColor" d="M12 .5a11.5 11.5 0 0 0-3.64 22.41c.58.1.79-.25.79-.56v-2c-3.2.7-3.88-1.37-3.88-1.37-.53-1.33-1.28-1.69-1.28-1.69-1.05-.71.08-.7.08-.7 1.16.08 1.77 1.19 1.77 1.19 1.03 1.77 2.71 1.26 3.37.96.1-.75.4-1.26.73-1.55-2.56-.29-5.25-1.28-5.25-5.7 0-1.26.45-2.29 1.19-3.09-.12-.29-.52-1.47.11-3.06 0 0 .97-.31 3.17 1.18a11 11 0 0 1 5.77 0c2.2-1.49 3.17-1.18 3.17-1.18.63 1.59.23 2.77.11 3.06.74.8 1.19 1.83 1.19 3.09 0 4.43-2.7 5.4-5.27 5.69.41.36.78 1.06.78 2.14v3.17c0 .31.21.67.8.56A11.5 11.5 0 0 0 12 .5Z"/></svg>
+      </a>
+    </nav>
+  </header>
+
+  <main id="top">
+    <section class="hero">
+      <p class="eyebrow">C · GTK4 · libadwaita · libgit2</p>
+      <h1>
+        <span class="tr">Git, Linux masaüstünde <em>sade</em> ve hızlı.</span>
+        <span class="en">Git on the Linux desktop, <em>simple</em> and fast.</span>
+      </h1>
+      <p class="lead">
+        <span class="tr">GitHub Desktop'tan ilham alan, C ile yazılmış yerel bir uygulama. Değişikliklerini gör, istediğin dosyaları commit et, dallar arasında geç, tek tıkla push et.</span>
+        <span class="en">A native app inspired by GitHub Desktop, written in C. See your changes, commit exactly the files you want, switch branches and push with one click.</span>
+      </p>
+      <div class="cta">
+        <a class="button primary" href="#install"><span class="tr">Kurulum</span><span class="en">Install</span></a>
+        <a class="button" href="https://github.com/kefy266/Git-Desktop-For-Linux"><span class="tr">Kaynak kod</span><span class="en">Source code</span></a>
+      </div>
+      <figure class="shot hero-shot">
+        <picture>
+          <source srcset="assets/changes-light.png" media="(prefers-color-scheme: light)">
+          <img src="assets/changes-dark.png" width="1280" height="800"
+               alt="Git Desktop For Linux: değişiklik listesi ve renkli diff / changes list and colored diff">
+        </picture>
+      </figure>
+    </section>
+
+    <section id="features" class="features">
+      <h2><span class="tr">Neler yapabilir?</span><span class="en">What it does</span></h2>
+      <div class="grid">
+        <article class="card">
+          <svg class="icon" viewBox="0 0 24 24"><path d="M14 3H7a2 2 0 0 0-2 2v14a2 2 0 0 0 2 2h10a2 2 0 0 0 2-2V8ZM14 3v5h5M12 11v6M9 14h6"/></svg>
+          <h3><span class="tr">Seçerek commit</span><span class="en">Pick what you commit</span></h3>
+          <p><span class="tr">Her dosyanın yanında bir onay kutusu var. Sadece işaretliler commit edilir; push edene kadar <b>Undo</b> ile geri alabilirsin.</span>
+             <span class="en">Every file has a checkbox. Only ticked files are committed, and <b>Undo</b> takes it back until you push.</span></p>
+        </article>
+        <article class="card">
+          <svg class="icon" viewBox="0 0 24 24"><path d="M3.5 5A2.5 2.5 0 1 0 8.5 5A2.5 2.5 0 1 0 3.5 5ZM3.5 19A2.5 2.5 0 1 0 8.5 19A2.5 2.5 0 1 0 3.5 19ZM15.5 7A2.5 2.5 0 1 0 20.5 7A2.5 2.5 0 1 0 15.5 7ZM6 7.5V16.5M18 9.5C18 14.5 12 13.5 6.8 17.1"/></svg>
+          <h3><span class="tr">Dallar ve merge</span><span class="en">Branches & merge</span></h3>
+          <p><span class="tr">Aranabilir dal listesi, uzak dalları tek tıkla almak, değişikliklerini otomatik stash'leyerek dal değiştirmek, çakışmada <b>Abort merge</b>.</span>
+             <span class="en">A searchable branch list, one-click remote branches, switching branches with automatic stash, and <b>Abort merge</b> on conflicts.</span></p>
+        </article>
+        <article class="card">
+          <svg class="icon" viewBox="0 0 24 24"><path d="M20 11A8 8 0 0 0 5.4 6.5L4 8M4 3V8H9M4 13A8 8 0 0 0 18.6 17.5L20 16M20 21V16H15"/></svg>
+          <h3><span class="tr">Tek tuşla senkron</span><span class="en">One-button sync</span></h3>
+          <p><span class="tr">Fetch, Pull, Push ya da Publish branch: buton duruma göre ne gerektiğini söyler. Arayüz hiç donmaz.</span>
+             <span class="en">Fetch, Pull, Push or Publish branch: the button knows what's needed. The UI never freezes.</span></p>
+        </article>
+        <article class="card">
+          <svg class="icon" viewBox="0 0 24 24"><path d="M3 12A9 9 0 1 0 6 5.3L3 8M3 3V8H8M12 7V12L15 14"/></svg>
+          <h3><span class="tr">Okunaklı geçmiş</span><span class="en">Readable history</span></h3>
+          <p><span class="tr">Commit'ler, değişen dosyalar ve eski/yeni satır numaralı renkli diff'ler. Kaydırdıkça daha eski commit'ler yüklenir.</span>
+             <span class="en">Commits, changed files and colored diffs with old/new line numbers. Older commits load as you scroll.</span></p>
+        </article>
+        <article class="card">
+          <svg class="icon" viewBox="0 0 24 24"><path d="M8 8A4 4 0 1 0 16 8A4 4 0 1 0 8 8ZM4 21A8 8 0 0 1 20 21"/></svg>
+          <h3><span class="tr">GitHub hesabın</span><span class="en">Your GitHub account</span></h3>
+          <p><span class="tr">Tüm repoların (organizasyonlar dahil) listede. Token sistem anahtarlığında saklanır, <code>gh</code> CLI girişini de tanır.</span>
+             <span class="en">All your repositories (organizations too) in one list. The token lives in your system keyring; <code>gh</code> CLI logins work too.</span></p>
+        </article>
+        <article class="card">
+          <svg class="icon" viewBox="0 0 24 24"><path d="M8 7L3 12L8 17M16 7L21 12L16 17M14 4L10 20"/></svg>
+          <h3><span class="tr">Gerçekten yerel</span><span class="en">Truly native</span></h3>
+          <p><span class="tr">C ile yazılmış tek bir dosya; Electron yok, Python yok. Yerel git işlemleri libgit2 ile, açık/koyu tema sistemle uyumlu.</span>
+             <span class="en">A single binary written in C: no Electron, no Python. Local git work runs on libgit2, and light/dark follow your system.</span></p>
+        </article>
+      </div>
+    </section>
+
+    <section id="screens" class="screens">
+      <h2><span class="tr">Ekranlar</span><span class="en">Screens</span></h2>
+      <div class="tabs" role="tablist">
+        <button role="tab" aria-selected="true" data-shot="changes"><span class="tr">Değişiklikler</span><span class="en">Changes</span></button>
+        <button role="tab" aria-selected="false" data-shot="history"><span class="tr">Geçmiş</span><span class="en">History</span></button>
+        <button role="tab" aria-selected="false" data-shot="branches"><span class="tr">Dallar</span><span class="en">Branches</span></button>
+        <button role="tab" aria-selected="false" data-shot="account"><span class="tr">Hesap</span><span class="en">Account</span></button>
+      </div>
+      <figure class="shot gallery">
+        <picture data-panel="changes">
+          <source srcset="assets/changes-light.png" media="(prefers-color-scheme: light)">
+          <img src="assets/changes-dark.png" width="1280" height="800" alt="Changes" loading="lazy">
+        </picture>
+        <picture data-panel="history" hidden>
+          <source srcset="assets/history-light.png" media="(prefers-color-scheme: light)">
+          <img src="assets/history-dark.png" width="1280" height="800" alt="History" loading="lazy">
+        </picture>
+        <div class="popover-shot" data-panel="branches" hidden>
+          <img src="assets/branches-dark.png" alt="Branch list" loading="lazy">
+        </div>
+        <div class="popover-shot" data-panel="account" hidden>
+          <img src="assets/account-dark.png" alt="Account menu" loading="lazy">
+        </div>
+      </figure>
+    </section>
+
+    <section id="install" class="install">
+      <h2><span class="tr">Kurulum</span><span class="en">Install</span></h2>
+      <p class="lead small">
+        <span class="tr">Şimdilik kaynaktan derleniyor. Gerekenler: GTK ≥ 4.16, libadwaita ≥ 1.8, GtkSourceView ≥ 5.16, libgit2, libsecret, json-glib, libsoup 3 ve git. Arch, CachyOS ve Fedora'nın güncel sürümlerinde hepsi hazır.</span>
+        <span class="en">For now it builds from source. You need GTK ≥ 4.16, libadwaita ≥ 1.8, GtkSourceView ≥ 5.16, libgit2, libsecret, json-glib, libsoup 3 and git. Current Arch, CachyOS and Fedora have them all.</span>
+      </p>
+
+      <div class="steps">
+        <div class="step">
+          <span class="num">1</span>
+          <div>
+            <h3><span class="tr">Bağımlılıklar</span><span class="en">Dependencies</span></h3>
+            <div class="distros" role="tablist">
+              <button role="tab" aria-selected="true" data-distro="arch">Arch / CachyOS</button>
+              <button role="tab" aria-selected="false" data-distro="fedora">Fedora</button>
+              <button role="tab" aria-selected="false" data-distro="debian">Debian / Ubuntu</button>
+            </div>
+            <pre data-distro-panel="arch"><code>sudo pacman -S --needed base-devel git gtk4 libadwaita gtksourceview5 libgit2 libsecret json-glib libsoup3</code></pre>
+            <pre data-distro-panel="fedora" hidden><code>sudo dnf install gcc make pkgconf git gtk4-devel libadwaita-devel gtksourceview5-devel libgit2-devel libsecret-devel json-glib-devel libsoup3-devel</code></pre>
+            <pre data-distro-panel="debian" hidden><code>sudo apt install build-essential pkg-config git libgtk-4-dev libadwaita-1-dev libgtksourceview-5-dev libgit2-dev libsecret-1-dev libjson-glib-dev libsoup-3.0-dev</code></pre>
+            <p class="note debian-note" hidden>
+              <span class="tr">Not: libadwaita 1.8 yalnızca yeni sürümlerde (Debian testing, Ubuntu 25.10+) var.</span>
+              <span class="en">Note: libadwaita 1.8 is only in recent releases (Debian testing, Ubuntu 25.10+).</span>
+            </p>
+          </div>
+        </div>
+        <div class="step">
+          <span class="num">2</span>
+          <div>
+            <h3><span class="tr">Derle ve kur</span><span class="en">Build and install</span></h3>
+<pre><code>git clone https://github.com/kefy266/Git-Desktop-For-Linux.git
+cd Git-Desktop-For-Linux/c
+make
+make install    # ~/.local/bin + <span class="tr">uygulama menüsü</span><span class="en">app menu</span></code></pre>
+          </div>
+        </div>
+        <div class="step">
+          <span class="num">3</span>
+          <div>
+            <h3><span class="tr">Başlat</span><span class="en">Start</span></h3>
+<pre><code>git-desktop ~/Projects/my-repo</code></pre>
+            <p class="note"><span class="tr">Ya da uygulama menüsünden <b>Git Desktop For Linux</b>'u aç.</span><span class="en">Or open <b>Git Desktop For Linux</b> from your app menu.</span></p>
+          </div>
+        </div>
+      </div>
+    </section>
+
+    <section class="shortcuts">
+      <h2><span class="tr">Kısayollar</span><span class="en">Shortcuts</span></h2>
+      <div class="kbd-grid">
+        <div><kbd>Ctrl</kbd>+<kbd>Enter</kbd><span>Commit</span></div>
+        <div><kbd>Ctrl</kbd>+<kbd>P</kbd><span>Push</span></div>
+        <div><kbd>Ctrl</kbd>+<kbd>Shift</kbd>+<kbd>P</kbd><span>Pull</span></div>
+        <div><kbd>Ctrl</kbd>+<kbd>Shift</kbd>+<kbd>T</kbd><span>Fetch</span></div>
+        <div><kbd>Ctrl</kbd>+<kbd>T</kbd><span class="tr">Repo listesi</span><span class="en">Repository list</span></div>
+        <div><kbd>Ctrl</kbd>+<kbd>B</kbd><span class="tr">Dal listesi</span><span class="en">Branch list</span></div>
+        <div><kbd>Ctrl</kbd>+<kbd>Shift</kbd>+<kbd>N</kbd><span class="tr">Yeni dal</span><span class="en">New branch</span></div>
+        <div><kbd>Ctrl</kbd>+<kbd>Shift</kbd>+<kbd>O</kbd><span class="tr">Repo klonla</span><span class="en">Clone repository</span></div>
+        <div><kbd>Ctrl</kbd>+<kbd>1</kbd> / <kbd>2</kbd><span class="tr">Değişiklikler / Geçmiş</span><span class="en">Changes / History</span></div>
+      </div>
+    </section>
+  </main>
+
+  <footer>
+    <p>
+      <span class="tr">Geliştirici</span><span class="en">Made by</span>
+      <a href="https://github.com/kefy266">Kağan Efe TOPÇU (@kefy266)</a> ·
+      <span class="tr"><a href="https://github.com/desktop/desktop">GitHub Desktop</a>'tan ilham alındı, onunla bağlantılı değildir.</span>
+      <span class="en">Inspired by <a href="https://github.com/desktop/desktop">GitHub Desktop</a>, not affiliated with it.</span>
+    </p>
+  </footer>
+
+  <script>
+    // Language: saved choice, else the browser's language
+    (function () {
+      var root = document.documentElement;
+      var saved = null;
+      try { saved = localStorage.getItem("lang"); } catch (e) {}
+      var lang = saved || ((navigator.language || "").toLowerCase().indexOf("tr") === 0 ? "tr" : "en");
+      var button = document.querySelector(".lang");
+      function apply(l) {
+        root.lang = l;
+        button.textContent = l === "tr" ? "EN" : "TR";
+      }
+      apply(lang);
+      button.addEventListener("click", function () {
+        lang = lang === "tr" ? "en" : "tr";
+        apply(lang);
+        try { localStorage.setItem("lang", lang); } catch (e) {}
+      });
+    })();
+
+    // Simple tab groups: screenshots and distro commands
+    function tabs(buttonsSel, attr, panelAttr, onSelect) {
+      var buttons = document.querySelectorAll(buttonsSel);
+      buttons.forEach(function (b) {
+        b.addEventListener("click", function () {
+          buttons.forEach(function (o) { o.setAttribute("aria-selected", o === b ? "true" : "false"); });
+          document.querySelectorAll("[" + panelAttr + "]").forEach(function (p) {
+            p.hidden = p.getAttribute(panelAttr) !== b.getAttribute(attr);
+          });
+          if (onSelect) onSelect(b.getAttribute(attr));
+        });
+      });
+    }
+    tabs(".tabs [data-shot]", "data-shot", "data-panel");
+    tabs(".distros [data-distro]", "data-distro", "data-distro-panel", function (d) {
+      document.querySelector(".debian-note").hidden = d !== "debian";
+    });
+  </script>
+</body>
+</html>
