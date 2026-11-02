@@ -2313,7 +2313,8 @@ take_screenshot (gpointer data)
     gdk_texture_save_to_png (tex, shot->path);
     g_print ("screenshot: %s\n", shot->path);
   }
-  gtk_window_close (GTK_WINDOW (shot->self));
+  /* an open dialog would block close-request: quit the app outright */
+  g_application_quit (G_APPLICATION (gtk_window_get_application (GTK_WINDOW (shot->self))));
   g_free (shot->path);
   g_free (shot->view);
   g_free (shot);
