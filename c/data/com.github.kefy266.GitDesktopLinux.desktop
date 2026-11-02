@@ -1,0 +1,12 @@
+[Desktop Entry]
+Type=Application
+Name=Git Desktop For Linux
+GenericName=Git Client
+Comment=Commit, branch, push and pull with a simple Git desktop app
+Exec=git-desktop %F
+Icon=com.github.kefy266.GitDesktopLinux
+Terminal=false
+Categories=Development;RevisionControl;GTK;
+Keywords=git;github;commit;branch;version control;
+StartupNotify=true
+MimeType=inode/directory;
